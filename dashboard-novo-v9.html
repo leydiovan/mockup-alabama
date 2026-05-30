@@ -1,0 +1,2221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Fazenda Alabama — v9 mobile</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --bg2: #111827;
+    --panel: rgba(17, 24, 39, 0.88);
+    --panel-solid: #1f2937;
+    --border: rgba(255, 255, 255, 0.1);
+    --border2: rgba(255, 255, 255, 0.18);
+    --text: #e5e7eb;
+    --muted: #6b7280;
+    --accent: #38bdf8;
+    --accent2: #818cf8;
+    --green: #34d399;
+    --amber: #fbbf24;
+    --red: #f87171;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;overscroll-behavior:none}
+
+  .app{display:grid;grid-template-columns:64px 1fr 380px;grid-template-rows:1fr;height:100dvh;position:relative}
+
+  .sidebar{background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:8px;z-index:500}
+  .logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:#fff;margin-bottom:8px}
+  .nav-btn{width:44px;height:44px;border:none;background:transparent;color:var(--muted);border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;font-family:inherit;padding:0}
+  .nav-btn:active{background:var(--border)}
+  .nav-btn.active{background:rgba(56,189,248,.15);color:var(--accent)}
+  .nav-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .nav-btn-label{display:none}
+
+  .map-area{position:relative;background:#1a1f2e;overflow:hidden}
+  #map{width:100%;height:100%;background:#0f172a;position:relative;z-index:1}
+  .leaflet-container{background:#0f172a;font-family:'Inter',sans-serif}
+
+  /* Canvas overlay para vento — POSICIONAMENTO CORRIGIDO */
+  #vento-canvas{
+    position:absolute;
+    top:0;left:0;right:0;bottom:0;
+    width:100%;height:100%;
+    pointer-events:none;
+    z-index:450;
+    display:none;
+  }
+
+  .top-controls{position:absolute;top:12px;left:12px;right:12px;display:flex;flex-direction:column;gap:8px;z-index:500;pointer-events:none}
+  .top-row{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+  .top-controls > *, .top-row > *{pointer-events:auto}
+
+  .fazenda-title{background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;padding:10px 14px;display:flex;align-items:center;gap:10px;min-height:40px}
+  .fazenda-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulse 2s infinite;flex-shrink:0}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .fazenda-title strong{font-size:13px;font-weight:600}
+  .fazenda-title .sub{font-size:11px;color:var(--muted);margin-left:4px}
+
+  .layers-control{background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;padding:6px;display:flex;gap:2px;flex-wrap:wrap}
+  .layer-btn{padding:8px 12px;font-size:12px;font-weight:500;color:var(--muted);background:transparent;border:1px solid transparent;border-radius:8px;cursor:pointer;font-family:inherit;transition:background .15s;white-space:nowrap;min-height:36px;display:flex;align-items:center;gap:5px}
+  .layer-btn:active{background:var(--border)}
+  .layer-btn.active{color:var(--text);background:var(--border);border-color:var(--border2)}
+  .layer-btn .icon{display:inline-block;width:8px;height:8px;border-radius:2px;flex-shrink:0}
+
+  .variable-selector{background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;padding:6px;display:flex;gap:2px;align-self:flex-start;max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .var-btn{padding:7px 12px;font-size:12px;font-weight:500;color:var(--muted);background:transparent;border:none;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;min-height:34px;display:flex;align-items:center;gap:5px}
+  .var-btn:active{background:var(--border)}
+  .var-btn.active{color:#0a0e1a;background:var(--accent)}
+
+  .zoom-ctrl{position:absolute;right:12px;top:120px;display:flex;flex-direction:column;gap:1px;z-index:500}
+  .zoom-ctrl button{width:38px;height:38px;background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);color:var(--text);font-size:18px;font-weight:600;cursor:pointer;font-family:inherit;line-height:1;display:flex;align-items:center;justify-content:center;padding:0}
+  .zoom-ctrl button:first-child{border-radius:10px 10px 0 0}
+  .zoom-ctrl button:last-child{border-radius:0 0 10px 10px;border-top:none}
+  .zoom-ctrl button:active{background:var(--border)}
+
+  .map-type{position:absolute;right:12px;top:212px;background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;z-index:500;overflow:hidden;min-width:60px}
+  .map-type button{padding:9px 10px;font-size:10px;font-weight:600;color:var(--muted);background:transparent;border:none;cursor:pointer;font-family:inherit;text-transform:uppercase;letter-spacing:.05em;min-height:34px}
+  .map-type button:active{background:var(--border)}
+  .map-type button.active{background:var(--border);color:var(--text)}
+
+  .legend{position:absolute;left:12px;bottom:160px;background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;padding:10px 12px;z-index:500;font-size:11px;min-width:200px;max-width:280px}
+  .legend-title{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px}
+  .legend-scale{display:flex;align-items:center;gap:6px}
+  .legend-gradient{flex:1;height:10px;border-radius:5px}
+  .legend-min,.legend-max{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)}
+
+  .timeline{position:absolute;bottom:12px;left:12px;right:12px;background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:14px;padding:12px 14px;z-index:500}
+  .timeline-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px;flex-wrap:wrap}
+  .timeline-label{font-size:10px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.05em}
+  .timeline-time{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:600;color:var(--accent)}
+  .play-btn{width:34px;height:34px;border-radius:50%;background:var(--accent);border:none;color:#0a0e1a;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;padding:0}
+  .play-btn:active{transform:scale(.95)}
+  .play-btn svg{width:14px;height:14px}
+  .period-pills{display:flex;gap:3px;background:var(--border);padding:3px;border-radius:8px;flex-wrap:wrap}
+  .period-pill{padding:5px 10px;font-size:11px;font-weight:600;color:var(--muted);background:transparent;border:none;border-radius:6px;cursor:pointer;font-family:inherit;min-height:28px}
+  .period-pill:active{background:var(--panel-solid)}
+  .period-pill.active{background:var(--panel-solid);color:var(--text)}
+  .slider-wrap{position:relative;height:32px}
+  .slider-track{position:absolute;top:14px;left:0;right:0;height:4px;background:var(--border);border-radius:2px}
+  .slider-progress{position:absolute;top:14px;left:0;height:4px;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px}
+  .slider-thumb{position:absolute;top:6px;width:20px;height:20px;background:#fff;border-radius:50%;box-shadow:0 0 0 4px rgba(56,189,248,.25);transform:translateX(-50%);pointer-events:none}
+  input[type=range].slider-input{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;z-index:10;margin:0}
+
+  .sub-controls{position:absolute;left:12px;top:108px;z-index:500;display:flex;flex-direction:column;gap:6px}
+  .sub-ctrl-group{background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:10px;padding:6px;display:flex;gap:2px}
+  .sub-ctrl-group .sub-label{font-size:10px;color:var(--muted);padding:4px 8px;align-self:center;font-weight:500}
+  .sub-btn{padding:5px 9px;font-size:11px;font-weight:500;color:var(--muted);background:transparent;border:none;border-radius:6px;cursor:pointer;font-family:inherit;min-height:28px}
+  .sub-btn:active{background:var(--border)}
+  .sub-btn.active{background:var(--accent);color:#0a0e1a}
+
+  .panel{background:var(--bg2);border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .panel-tabs{display:flex;padding:10px 12px 0;gap:2px;border-bottom:1px solid var(--border);flex-shrink:0}
+  .panel-tab{padding:10px 6px;font-size:12px;font-weight:500;color:var(--muted);background:transparent;border:none;cursor:pointer;font-family:inherit;flex:1;text-align:center;border-bottom:2px solid transparent;margin-bottom:-1px;min-height:38px}
+  .panel-tab:active{background:var(--border)}
+  .panel-tab.active{color:var(--text);border-bottom-color:var(--accent)}
+  .panel-content{flex:1;overflow-y:auto;padding:14px;-webkit-overflow-scrolling:touch}
+  .panel-content::-webkit-scrollbar{width:6px}
+  .panel-content::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+  .panel-section{margin-bottom:18px}
+  .panel-section-title{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px}
+  .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .stat-card{background:var(--panel-solid);border-radius:10px;padding:11px;border:1px solid var(--border)}
+  .stat-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:500;margin-bottom:4px}
+  .stat-value{font-size:20px;font-weight:700;line-height:1.1}
+  .stat-value .unit{font-size:11px;font-weight:400;color:var(--muted);margin-left:2px}
+  .stat-card.wide{grid-column:span 2}
+  .stat-trend{font-size:10px;margin-top:3px}
+  .stat-trend.up{color:var(--red)}
+  .stat-trend.down{color:var(--accent)}
+  .stat-trend.neutral{color:var(--muted)}
+
+  .station-list{display:flex;flex-direction:column;gap:5px}
+  .station-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--panel-solid);border-radius:10px;cursor:pointer;border:1px solid transparent;transition:background .15s;min-height:54px}
+  .station-item:active{background:var(--border)}
+  .station-item.selected{border-color:var(--accent);background:rgba(56,189,248,.08)}
+  .station-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px currentColor}
+  .station-info{flex:1;min-width:0}
+  .station-name{font-size:13px;font-weight:600}
+  .station-meta{font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace}
+  .station-temp{font-size:14px;font-weight:600;font-family:'JetBrains Mono',monospace}
+
+  .mini-chart{height:80px;background:var(--panel-solid);border-radius:10px;padding:8px;position:relative}
+
+  /* ═══════════════ MOBILE NOVO LAYOUT (v7) ═══════════════ */
+  /* Estilo: ícones flutuantes + bottom sheets */
+  @media (max-width: 900px) {
+    /* App ocupa tela inteira, sem sidebar */
+    .app{grid-template-columns:1fr;grid-template-rows:1fr;height:100dvh}
+    .sidebar{display:none}
+    .map-area{height:100dvh;width:100%}
+
+    /* Esconde todos os controles do desktop no mobile */
+    .top-controls{display:none}
+    .legend{display:none}
+    .map-type{display:none}
+    .zoom-ctrl{display:none}
+    .sub-controls{display:none}
+
+    /* ═══ Mini-título compacto (canto superior esquerdo) ═══ */
+    .mobile-title{
+      position:absolute;top:max(12px, env(safe-area-inset-top, 12px));left:12px;z-index:500;
+      background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+      border:1px solid var(--border);border-radius:14px;
+      padding:5px 10px;display:flex;align-items:baseline;gap:5px;
+      box-shadow:0 2px 8px rgba(0,0,0,.25);
+    }
+    .mobile-title strong{font-size:11px;font-weight:600;letter-spacing:.01em}
+    .mobile-title .sub{font-size:9px;color:var(--muted);font-weight:500}
+
+    /* ═══ Indicador modo SIM compacto ═══ */
+    .sim-tag{
+      display:flex;position:absolute;top:max(12px, env(safe-area-inset-top, 12px));right:12px;left:auto;transform:none;
+      background:rgba(251,191,36,.18);border:1px solid var(--amber);color:var(--amber);
+      padding:5px 8px;border-radius:12px;font-size:9px;font-weight:600;
+      z-index:500;letter-spacing:.04em;
+    }
+
+    /* ═══ FABs (Floating Action Buttons) — botões circulares ═══ */
+    .fab-container-left{
+      position:absolute;left:12px;bottom:calc(96px + var(--safe-bottom));z-index:500;
+      display:flex;flex-direction:column;gap:10px;
+    }
+    .fab-container-right{
+      position:absolute;right:12px;bottom:calc(96px + var(--safe-bottom));z-index:500;
+      display:flex;flex-direction:column;gap:10px;
+    }
+
+    .fab-mobile{
+      width:44px;height:44px;border-radius:50%;
+      background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+      border:1px solid var(--border);color:var(--text);
+      display:flex;align-items:center;justify-content:center;
+      cursor:pointer;transition:all .15s;
+      box-shadow:0 4px 12px rgba(0,0,0,.3);
+      padding:0;font-family:inherit;
+    }
+    .fab-mobile:active{transform:scale(.92);background:var(--border)}
+    .fab-mobile.active{background:var(--accent);color:#0a0e1a;border-color:var(--accent)}
+    .fab-mobile svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+    /* Badge indicando estado ativo no canto do FAB */
+    .fab-mobile .fab-badge{
+      position:absolute;top:-2px;right:-2px;
+      min-width:16px;height:16px;padding:0 4px;border-radius:8px;
+      background:var(--accent);color:#0a0e1a;
+      font-size:9px;font-weight:700;
+      display:flex;align-items:center;justify-content:center;
+      border:2px solid var(--bg2);
+    }
+
+    /* ═══ Timeline mobile compacta ═══ */
+    .timeline{
+      position:absolute;bottom:calc(12px + var(--safe-bottom));left:12px;right:12px;
+      padding:8px 12px;
+      background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+      border-radius:14px;
+    }
+    .timeline-header{gap:8px;margin-bottom:6px;flex-wrap:nowrap;align-items:center}
+    .timeline-header > div:first-child{flex-shrink:0}
+    .timeline-label{font-size:9px}
+    .timeline-time{font-size:10px}
+    .play-btn{width:28px;height:28px}
+    .play-btn svg{width:12px;height:12px}
+
+    .period-pills{order:3;width:100%;justify-content:space-between;padding:2px;gap:1px}
+    .period-pill{flex:1;text-align:center;padding:4px 2px;font-size:9px;min-height:24px}
+
+    .slider-wrap{height:24px}
+    .slider-track{top:11px}
+    .slider-progress{top:11px}
+    .slider-thumb{top:4px;width:16px;height:16px;box-shadow:0 0 0 3px rgba(56,189,248,.25)}
+
+    /* ═══ Drawer do painel inferior ═══ */
+    .panel{
+      position:fixed;bottom:0;left:0;right:0;top:auto;
+      height:75dvh;max-height:600px;
+      border-left:none;border-top:1px solid var(--border);
+      border-radius:18px 18px 0 0;z-index:700;
+      transform:translateY(100%);
+      transition:transform .3s cubic-bezier(.32,.72,0,1);
+      box-shadow:0 -8px 32px rgba(0,0,0,.5);
+      padding-bottom:var(--safe-bottom);
+    }
+    .panel.open{transform:translateY(0)}
+    .panel-handle{display:flex;align-items:center;justify-content:center;height:28px;cursor:grab;flex-shrink:0;position:relative;touch-action:none}
+    .panel-handle::before{content:'';width:44px;height:4px;background:var(--border2);border-radius:2px}
+    .panel-handle::after{content:'';position:absolute;top:0;left:0;right:0;bottom:0}
+    .panel-close{position:absolute;top:8px;right:10px;width:30px;height:30px;border-radius:50%;background:var(--border);border:none;color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:10;font-family:inherit;line-height:1;padding:0}
+
+    /* ═══ Bottom Sheets — menus que sobem do rodapé ═══ */
+    .sheet-backdrop{
+      position:fixed;inset:0;background:rgba(0,0,0,.5);
+      z-index:800;opacity:0;pointer-events:none;
+      transition:opacity .25s;
+    }
+    .sheet-backdrop.open{opacity:1;pointer-events:auto}
+
+    .bottom-sheet{
+      position:fixed;bottom:0;left:0;right:0;
+      background:var(--bg2);
+      border-radius:20px 20px 0 0;
+      z-index:850;
+      transform:translateY(100%);
+      transition:transform .3s cubic-bezier(.32,.72,0,1);
+      padding-bottom:var(--safe-bottom);
+      max-height:80dvh;overflow-y:auto;
+      box-shadow:0 -8px 32px rgba(0,0,0,.5);
+    }
+    .bottom-sheet.open{transform:translateY(0)}
+
+    .sheet-handle{height:24px;display:flex;align-items:center;justify-content:center}
+    .sheet-handle::before{content:'';width:44px;height:4px;background:var(--border2);border-radius:2px}
+
+    .sheet-title{font-size:15px;font-weight:600;padding:4px 20px 14px;color:var(--text);letter-spacing:-.01em}
+
+    .sheet-section{padding:0 12px 16px}
+    .sheet-section-title{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding:14px 4px 6px}
+
+    /* Grid 2-col para variáveis e mapas (lista visual) */
+    .sheet-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+    .sheet-grid.cols-1{display:flex;flex-direction:column;gap:0;background:var(--panel-solid);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+
+    .sheet-item{
+      background:var(--panel-solid);border:1px solid var(--border);
+      border-radius:10px;padding:12px;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;gap:6px;
+      transition:background .15s;font-family:inherit;color:var(--text);
+      min-height:44px;
+    }
+    .sheet-item:active{background:var(--border)}
+    .sheet-item.active{background:rgba(56,189,248,.12);border-color:var(--accent);color:var(--accent)}
+    .sheet-item .item-icon{font-size:14px;line-height:1;color:var(--muted);opacity:.7}
+    .sheet-item.active .item-icon{color:var(--accent);opacity:1}
+    .sheet-item .item-label{font-size:13px;font-weight:500;text-align:center}
+
+    /* Itens em lista (estilo Apple Settings) */
+    .sheet-item.list-style{
+      flex-direction:row;justify-content:flex-start;text-align:left;
+      padding:13px 16px;min-height:48px;
+      background:transparent;border:none;border-radius:0;
+      border-bottom:1px solid var(--border);
+    }
+    .sheet-item.list-style:last-child{border-bottom:none}
+    .sheet-item.list-style:active{background:var(--border)}
+    .sheet-item.list-style.active{background:transparent;color:var(--text)}
+    .sheet-item.list-style .item-icon{
+      font-size:14px;width:22px;text-align:center;flex-shrink:0;color:var(--muted);opacity:.6;
+    }
+    .sheet-item.list-style.active .item-icon{color:var(--accent);opacity:1}
+    .sheet-item.list-style .item-label{flex:1;text-align:left;font-size:13px;font-weight:500}
+
+    /* Toggle estilo iOS - bolinha cinza/azul */
+    .sheet-item.list-style .item-check{
+      width:42px;height:24px;border-radius:12px;
+      background:var(--border);position:relative;flex-shrink:0;
+      transition:background .2s;
+    }
+    .sheet-item.list-style .item-check::before{
+      content:'';position:absolute;top:2px;left:2px;
+      width:20px;height:20px;border-radius:50%;
+      background:white;transition:transform .2s;
+      box-shadow:0 1px 3px rgba(0,0,0,.3);
+    }
+    .sheet-item.list-style.active .item-check{background:var(--accent)}
+    .sheet-item.list-style.active .item-check::before{transform:translateX(18px)}
+    .sheet-item.list-style.active .item-check::after{content:'';display:none}
+
+    /* ═══ Modo tela cheia (esconde todos os controles) ═══ */
+    body.fullscreen .mobile-title,
+    body.fullscreen .sim-tag,
+    body.fullscreen .fab-container-left,
+    body.fullscreen .fab-container-right,
+    body.fullscreen .timeline{
+      opacity:0;pointer-events:none;transition:opacity .3s;
+    }
+    body.fullscreen .exit-fullscreen{
+      display:flex;
+    }
+    .exit-fullscreen{
+      display:none;
+      position:absolute;top:max(12px, env(safe-area-inset-top, 12px));right:12px;
+      width:40px;height:40px;border-radius:50%;
+      background:var(--panel);backdrop-filter:blur(12px);
+      border:1px solid var(--border);color:var(--text);
+      align-items:center;justify-content:center;
+      z-index:990;cursor:pointer;padding:0;
+      box-shadow:0 4px 12px rgba(0,0,0,.3);
+    }
+    .exit-fullscreen svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2}
+
+    /* ═══ Tooltip de nome do lote (permanente) ═══ */
+    .lote-name-label{
+      background:rgba(0,0,0,.6);color:white;
+      padding:1px 5px;border-radius:3px;
+      font-size:9px;font-weight:600;
+      pointer-events:none;
+      text-shadow:0 1px 2px rgba(0,0,0,.8);
+      border:none;box-shadow:none;
+      white-space:nowrap;
+    }
+
+    /* ═══ Bússola visual (canto superior direito) ═══ */
+    .compass-widget{
+      position:absolute;top:max(60px, env(safe-area-inset-top, 60px));right:12px;
+      width:52px;height:52px;border-radius:50%;
+      background:var(--panel);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+      border:1px solid var(--border);
+      z-index:495;
+      display:none;align-items:center;justify-content:center;
+      box-shadow:0 4px 12px rgba(0,0,0,.3);
+      pointer-events:none;
+    }
+    .compass-widget.show{display:flex}
+    .compass-rose{
+      position:relative;width:100%;height:100%;
+      display:flex;align-items:center;justify-content:center;
+    }
+    .compass-rose .n-marker{
+      position:absolute;top:4px;left:50%;transform:translateX(-50%);
+      color:#ef4444;font-size:11px;font-weight:700;font-family:'Inter',sans-serif;
+      letter-spacing:.05em;
+    }
+    .compass-rose .needle{
+      width:2px;height:36px;background:linear-gradient(to bottom,#ef4444 0,#ef4444 50%,#94a3b8 50%,#94a3b8 100%);
+      border-radius:1px;
+      position:relative;
+    }
+    .compass-rose .needle::before,.compass-rose .needle::after{
+      content:'';position:absolute;left:50%;
+      width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;
+    }
+    .compass-rose .needle::before{
+      top:-2px;transform:translateX(-50%);
+      border-bottom:8px solid #ef4444;
+    }
+    .compass-rose .needle::after{
+      bottom:-2px;transform:translateX(-50%);
+      border-top:8px solid #94a3b8;
+    }
+    .compass-rose .center-dot{
+      position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+      width:6px;height:6px;border-radius:50%;background:var(--text);
+      box-shadow:0 0 0 2px var(--panel-solid);
+    }
+  }
+
+  /* Em desktop, esconde elementos só-mobile */
+  @media (min-width: 901px) {
+    .mobile-title,
+    .fab-container-left,
+    .fab-container-right,
+    .exit-fullscreen,
+    .sheet-backdrop,
+    .compass-widget,
+    .bottom-sheet{display:none !important}
+  }
+
+  @media (min-width: 901px) {
+    .panel-handle{display:none}
+    .panel-close{display:none !important}
+    .mobile-title,
+    .fab-container-left,
+    .fab-container-right,
+    .exit-fullscreen,
+    .sheet-backdrop,
+    .compass-widget,
+    .bottom-sheet{display:none !important}
+  }
+
+  .station-marker{background:transparent;border:none}
+  .marker-circle{width:30px;height:30px;border-radius:50%;border:2px solid #fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;font-family:'Inter';box-shadow:0 2px 8px rgba(0,0,0,.4)}
+  .marker-torre{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#1e40af,#3b82f6);border:3px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px;box-shadow:0 4px 12px rgba(59,130,246,.5)}
+
+  .leaflet-popup-content-wrapper{background:var(--panel-solid);color:var(--text);border-radius:12px;border:1px solid var(--border2)}
+  .leaflet-popup-tip{background:var(--panel-solid)}
+  .leaflet-popup-content{margin:14px 16px;font-family:'Inter',sans-serif;min-width:200px}
+  .popup-title{font-weight:700;font-size:14px;margin-bottom:8px;color:var(--accent)}
+  .popup-grid{display:grid;grid-template-columns:auto auto;gap:4px 12px;font-size:12px}
+  .popup-key{color:var(--muted)}
+  .popup-val{font-family:'JetBrains Mono',monospace;text-align:right}
+
+  .sim-tag{position:absolute;bottom:auto;top:62px;left:50%;transform:translateX(-50%);background:rgba(251,191,36,.15);border:1px solid var(--amber);color:var(--amber);padding:3px 10px;border-radius:12px;font-size:10px;font-weight:600;letter-spacing:.05em;z-index:300;white-space:nowrap}
+  @media (max-width: 900px) {.sim-tag{display:none}}
+
+  .chart-svg{width:100%;height:100%}
+  .chart-line{fill:none;stroke:var(--accent);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .chart-area{fill:url(#chart-grad)}
+
+  .leaflet-control-attribution{background:rgba(15,23,42,.85)!important;color:var(--muted)!important;font-size:9px!important;padding:1px 5px!important}
+  .leaflet-control-attribution a{color:var(--accent)!important}
+
+  .lote-tooltip{background:rgba(15,23,42,.95)!important;border:1px solid var(--border2)!important;color:var(--text)!important;font-size:11px!important;padding:4px 8px!important;border-radius:6px!important;font-family:'Inter'!important}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="logo">A</div>
+    <button class="nav-btn active" data-nav="map" title="Mapa">
+      <svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+      <span class="nav-btn-label">Mapa</span>
+    </button>
+    <button class="nav-btn" data-nav="stations" title="Estações">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      <span class="nav-btn-label">Estações</span>
+    </button>
+    <button class="nav-btn" data-nav="lotes" title="Lotes">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      <span class="nav-btn-label">Lotes</span>
+    </button>
+    <button class="nav-btn" data-nav="analise" title="Análise">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <span class="nav-btn-label">Análise</span>
+    </button>
+  </aside>
+
+  <section class="map-area">
+    <div id="map"></div>
+    <canvas id="vento-canvas"></canvas>
+
+    <div class="sim-tag">⚡ SIMULADO v9</div>
+
+    <!-- ═══════ MOBILE: Mini-título compacto ═══════ -->
+    <div class="mobile-title">
+      <strong>Alabama</strong>
+      <span class="sub" id="mobile-hdr-stats">20 est.</span>
+    </div>
+
+    <!-- ═══════ MOBILE: Botão sair tela cheia ═══════ -->
+    <button class="exit-fullscreen" id="btn-exit-fullscreen" aria-label="Sair tela cheia">
+      <svg viewBox="0 0 24 24"><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/></svg>
+    </button>
+
+    <!-- ═══════ MOBILE: Widget bússola ═══════ -->
+    <div class="compass-widget" id="compass-widget" aria-label="Bússola">
+      <div class="compass-rose">
+        <span class="n-marker">N</span>
+        <div class="needle"></div>
+        <span class="center-dot"></span>
+      </div>
+    </div>
+
+    <!-- ═══════ MOBILE: FABs lado esquerdo ═══════ -->
+    <div class="fab-container-left">
+      <button class="fab-mobile" id="fab-camadas" aria-label="Camadas">
+        <svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+      </button>
+      <button class="fab-mobile" id="fab-variavel" aria-label="Variável">
+        <svg viewBox="0 0 24 24"><path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0z"/></svg>
+      </button>
+      <button class="fab-mobile" id="fab-painel" aria-label="Painel de dados">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+      </button>
+    </div>
+
+    <!-- ═══════ MOBILE: FABs lado direito ═══════ -->
+    <div class="fab-container-right">
+      <button class="fab-mobile" id="fab-mapa" aria-label="Tipo de mapa">
+        <svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+      </button>
+      <button class="fab-mobile" id="fab-config" aria-label="Configurações">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+      <button class="fab-mobile" id="fab-zoom-in" aria-label="Zoom +">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="fab-mobile" id="fab-zoom-out" aria-label="Zoom -">
+        <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="fab-mobile" id="fab-gps" aria-label="Minha localização">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg>
+      </button>
+    </div>
+
+    <!-- ═══════ MOBILE: Backdrop dos sheets ═══════ -->
+    <div class="sheet-backdrop" id="sheet-backdrop"></div>
+
+    <!-- ═══════ MOBILE: Bottom Sheet — Camadas ═══════ -->
+    <div class="bottom-sheet" id="sheet-camadas">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Camadas do mapa</div>
+      <div class="sheet-section">
+        <div class="sheet-grid cols-1" id="sheet-camadas-list"></div>
+      </div>
+    </div>
+
+    <!-- ═══════ MOBILE: Bottom Sheet — Variável ═══════ -->
+    <div class="bottom-sheet" id="sheet-variavel">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Variável principal</div>
+      <div class="sheet-section">
+        <div class="sheet-grid" id="sheet-variavel-list"></div>
+      </div>
+      <div class="sheet-section" id="sheet-heatmap-style-wrap" style="display:none">
+        <div class="sheet-section-title">Estilo do heatmap</div>
+        <div class="sheet-grid" id="sheet-heatmap-style-list"></div>
+      </div>
+    </div>
+
+    <!-- ═══════ MOBILE: Bottom Sheet — Tipo de mapa ═══════ -->
+    <div class="bottom-sheet" id="sheet-mapa">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Tipo de mapa</div>
+      <div class="sheet-section">
+        <div class="sheet-grid" id="sheet-mapa-list"></div>
+      </div>
+    </div>
+
+    <!-- ═══════ MOBILE: Bottom Sheet — Configurações ═══════ -->
+    <div class="bottom-sheet" id="sheet-config">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">Configurações</div>
+      <div class="sheet-section">
+        <div class="sheet-grid cols-1">
+          <button class="sheet-item list-style" id="cfg-fullscreen">
+            <span class="item-label">Modo tela cheia</span>
+            <span class="item-check"></span>
+          </button>
+          <button class="sheet-item list-style" id="cfg-compass">
+            <span class="item-label">Mostrar bússola</span>
+            <span class="item-check"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+
+    <div class="top-controls">
+      <div class="top-row">
+        <div class="fazenda-title">
+          <span class="fazenda-dot"></span>
+          <strong>Fazenda Alabama</strong>
+          <span class="sub" id="hdr-stats">20 estações</span>
+        </div>
+        <div class="layers-control" id="layers-control">
+          <button class="layer-btn active" data-layer="lotes"><span class="icon" style="background:#34d399"></span>Lotes</button>
+          <button class="layer-btn active" data-layer="estacoes"><span class="icon" style="background:#38bdf8"></span>Estações</button>
+          <button class="layer-btn active" data-layer="heatmap"><span class="icon" style="background:linear-gradient(90deg,#3b82f6,#fbbf24,#ef4444)"></span>Heatmap</button>
+          <button class="layer-btn" data-layer="vento"><span class="icon" style="background:#34d399"></span>Vento</button>
+        </div>
+      </div>
+      <div class="variable-selector" id="variable-selector">
+        <button class="var-btn active" data-var="temp">🌡️ Temperatura</button>
+        <button class="var-btn" data-var="umid">💧 Umidade</button>
+        <button class="var-btn" data-var="pres">📊 Pressão</button>
+        <button class="var-btn" data-var="chuva">🌧️ Chuva acum.</button>
+      </div>
+    </div>
+
+    <div class="sub-controls" id="sub-controls">
+      <div class="sub-ctrl-group" id="heatmap-style-group">
+        <span class="sub-label">Estilo:</span>
+        <button class="sub-btn active" data-hm="interp">Interpolado</button>
+        <button class="sub-btn" data-hm="lote">Por lote</button>
+      </div>
+      <div class="sub-ctrl-group" id="vento-style-group" style="display:none">
+        <span class="sub-label">Vento:</span>
+        <button class="sub-btn active" data-vs="part-rastro">Partículas c/ rastro</button>
+        <button class="sub-btn" data-vs="part-puras">Partículas s/ rastro</button>
+      </div>
+    </div>
+
+    <div class="zoom-ctrl">
+      <button id="zoom-in">+</button>
+      <button id="zoom-out">−</button>
+    </div>
+
+    <div class="map-type">
+      <button class="active" data-tile="satellite">Sat</button>
+      <button data-tile="hybrid">Híbrido</button>
+      <button data-tile="terrain">Topo</button>
+      <button data-tile="streets">Ruas</button>
+    </div>
+
+    <div class="legend">
+      <div class="legend-title" id="legend-title">Temperatura (°C)</div>
+      <div class="legend-scale">
+        <span class="legend-min" id="legend-min">18</span>
+        <div class="legend-gradient" id="legend-gradient"></div>
+        <span class="legend-max" id="legend-max">34</span>
+      </div>
+    </div>
+
+    <div class="timeline">
+      <div class="timeline-header">
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="play-btn" id="play-btn">
+            <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </button>
+          <div>
+            <div class="timeline-label" id="timeline-label">Média do período</div>
+            <div class="timeline-time" id="timeline-time">--</div>
+          </div>
+        </div>
+        <div class="period-pills">
+          <button class="period-pill" data-period="live">Live</button>
+          <button class="period-pill active" data-period="24h">24h</button>
+          <button class="period-pill" data-period="7d">7 dias</button>
+          <button class="period-pill" data-period="30d">30 dias</button>
+          <button class="period-pill" data-period="safra">Safra</button>
+        </div>
+      </div>
+      <div class="slider-wrap">
+        <div class="slider-track"></div>
+        <div class="slider-progress" id="slider-progress" style="width:75%"></div>
+        <div class="slider-thumb" id="slider-thumb" style="left:75%"></div>
+        <input type="range" class="slider-input" id="slider-input" min="0" max="100" value="75">
+      </div>
+    </div>
+  </section>
+
+  <aside class="panel" id="panel">
+    <div class="panel-handle" id="panel-handle"></div>
+    <button class="panel-close" id="panel-close">×</button>
+    <div class="panel-tabs">
+      <button class="panel-tab active" data-tab="overview">Geral</button>
+      <button class="panel-tab" data-tab="stations">Estações</button>
+      <button class="panel-tab" data-tab="lotes">Lotes</button>
+      <button class="panel-tab" data-tab="analise">Análise</button>
+    </div>
+    <div class="panel-content" id="panel-content"></div>
+  </aside>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const LOTES = [{"nome":"Lote M2","coords":[[-12.66071560305771,-44.70843485970137],[-12.6555182003074,-44.68109862463577],[-12.65348510310963,-44.68078562910378],[-12.65883762998051,-44.70878111708113],[-12.66071560305771,-44.70843485970137]]},{"nome":"Lote M1","coords":[[-12.65862258756554,-44.70878681596615],[-12.6532782939973,-44.68065082771079],[-12.65202590714466,-44.68059164911004],[-12.64980328626371,-44.68070326073227],[-12.65145696561922,-44.68959662760905],[-12.6521709943747,-44.6894601373906],[-12.65296063519152,-44.69606031642893],[-12.65490049017588,-44.70946058489323],[-12.65862258756554,-44.70878681596615]]},{"nome":"Lote LS","coords":[[-12.67824048090528,-44.70606158526679],[-12.68351094037992,-44.72352047200774],[-12.67917132987097,-44.7239359035514],[-12.67398956122272,-44.70680278400334],[-12.67824048090528,-44.70606158526679]]},{"nome":"Lote 15B","coords":[[-12.69355996323981,-44.7371838202136],[-12.69309531691388,-44.73556352938243],[-12.69533349484666,-44.73513554716655],[-12.69565505469911,-44.73495384975041],[-12.69534224206442,-44.73316019266484],[-12.69515240241536,-44.73311570568817],[-12.68978038813985,-44.73363030497966],[-12.68966298810795,-44.73376990600669],[-12.68966326036663,-44.73404171108279],[-12.69016000250384,-44.73709119328606],[-12.69064069722868,-44.73715613553951],[-12.69355996323981,-44.7371838202136]]},{"nome":"Lote15A","coords":[[-12.69100857036978,-44.74244438730686],[-12.69016257513176,-44.73720012245729],[-12.69410051898936,-44.73727475896699],[-12.69455762306139,-44.73743431126533],[-12.69550120234648,-44.737386868563],[-12.69580445950162,-44.73799050479786],[-12.69562277015299,-44.73841685514067],[-12.6956374160662,-44.73860485468994],[-12.69573732058184,-44.73875614370331],[-12.6960477775666,-44.73876949090787],[-12.69646882867089,-44.74077400477448],[-12.69476844819378,-44.74219382919295],[-12.69100857036978,-44.74244438730686]]},{"nome":"SEDE 01","coords":[[-12.60333071939058,-44.71914452996553],[-12.60521641287075,-44.71880499461622],[-12.60556911822043,-44.72081036536486],[-12.60371361093058,-44.72126844083603],[-12.60333071939058,-44.71914452996553]]},{"nome":"Lote 12","coords":[[-12.65233454879945,-44.69106505360001],[-12.65217885399945,-44.68968855970001],[-12.65207073399944,-44.68954799160001],[-12.64454050579944,-44.69107932110001],[-12.64431597949945,-44.6909521857],[-12.64380920869945,-44.6889559022],[-12.64366962279945,-44.68877640439999],[-12.63853620679945,-44.68942171790001],[-12.63706756049945,-44.68943006280001],[-12.63686622489945,-44.68951784819999],[-12.63686321099945,-44.68979727629999],[-12.64150250499944,-44.71148190510001],[-12.64166414639943,-44.71169625459999],[-12.64199183589943,-44.71169508610001],[-12.65464949129944,-44.70945512040002],[-12.65479751009945,-44.7093579597],[-12.65294044189946,-44.6961891379],[-12.65233454879945,-44.69106505360001]]},{"nome":"Lote 10","coords":[[-12.65358908153706,-44.73702555205617],[-12.63821077052343,-44.73851085785272],[-12.63812423203839,-44.73874482912606],[-12.63769732922009,-44.74842572344719],[-12.6528237345473,-44.75415164960526],[-12.65358908153706,-44.73702555205617]]},{"nome":"Lote G2","coords":[[-12.59529314905634,-44.74802054884899],[-12.59513844699944,-44.74828523210001],[-12.59028752299941,-44.7517043335],[-12.59018698989942,-44.7519449507],[-12.59075487989943,-44.7535700299],[-12.59105226459943,-44.75410347970001],[-12.59738379149943,-44.76119253850001],[-12.59844055669943,-44.76192401080002],[-12.59949548859942,-44.7607961],[-12.60047571159943,-44.7599019422],[-12.60113437629944,-44.75863921010001],[-12.60194629170704,-44.7574170241153],[-12.59529314905634,-44.74802054884899]]},{"nome":"Lote C","coords":[[-12.59172453693325,-44.72375334417747],[-12.59064692461944,-44.72148457386468],[-12.59049078130904,-44.7214951967612],[-12.59019524353502,-44.72358212210681],[-12.59043116202352,-44.72371924537553],[-12.59095115997734,-44.72365952646368],[-12.59144342681348,-44.72391362619809],[-12.59180685822476,-44.7239502635054],[-12.59172453693325,-44.72375334417747]]},{"nome":"Lote 01","coords":[[-12.59529314905634,-44.74802054884899],[-12.59326676683151,-44.7451588034176],[-12.59318040199943,-44.7449813707],[-12.59322254989943,-44.7449018651],[-12.59571250099942,-44.74439156559999],[-12.59774604459944,-44.74421209369999],[-12.59839385339943,-44.74423186380001],[-12.60005830489942,-44.74442479660002],[-12.60101026219943,-44.744842901],[-12.60196025209943,-44.745432674],[-12.6048902501,-44.7515127719911],[-12.60521338749943,-44.75233974070002],[-12.60504851709943,-44.7527867338],[-12.60194629170704,-44.7574170241153],[-12.59529314905634,-44.74802054884899]]},{"nome":"Lote 02","coords":[[-12.57613618095761,-44.72096997303191],[-12.58782788069943,-44.7215857606],[-12.58889635239942,-44.72160416250001],[-12.59033463799615,-44.72150581964282],[-12.59000210495611,-44.7239740155487],[-12.58989532069943,-44.72418249289998],[-12.59013480929943,-44.7250143365],[-12.59029580569942,-44.7250363541],[-12.59057013789943,-44.72464739750001],[-12.59119552709943,-44.72414449830001],[-12.59179277559943,-44.72421370890001],[-12.59203804879943,-44.72442055110001],[-12.60149556708815,-44.7443550599101],[-12.60102579259943,-44.7444902367],[-12.60035342549943,-44.74415030660001],[-12.59944849819942,-44.7439042346],[-12.59879511219944,-44.74390914420001],[-12.59747944869943,-44.7436987234],[-12.59621843389942,-44.74358286550001],[-12.59560309119942,-44.7436104751],[-12.59504294829942,-44.74349844209999],[-12.59409606039942,-44.7436079539],[-12.59341641709943,-44.74380553470001],[-12.59251786299943,-44.74383712659999],[-12.59230353049943,-44.743761404],[-12.57613618095761,-44.72096997303191]]},{"nome":"Lote 06","coords":[[-12.62273472124849,-44.74280409662355],[-12.61033416070812,-44.74301255831122],[-12.60995272343742,-44.74297098007017],[-12.60966940390654,-44.74273843088052],[-12.60840816645122,-44.73597840794321],[-12.60850880851584,-44.73519745294531],[-12.60625705610775,-44.72218328171813],[-12.60630805605948,-44.7218970450802],[-12.60619152457054,-44.72143213855465],[-12.60590436796817,-44.7209724148449],[-12.60551245628275,-44.71895681135435],[-12.60554803959559,-44.71881935222531],[-12.61814169749118,-44.71662162032423],[-12.61849251007534,-44.71660481243618],[-12.61868797675254,-44.71672823343915],[-12.61877942232832,-44.71695582000307],[-12.61990475659944,-44.7239913783],[-12.62122021349944,-44.73295247350001],[-12.62240329969944,-44.73936337340001],[-12.62280493489943,-44.74216421280001],[-12.62281924069943,-44.74268171480001],[-12.62273472124849,-44.74280409662355]]},{"nome":"Lote 08","coords":[[-12.61960889539412,-44.72163577597392],[-12.63085276299944,-44.7188143806],[-12.63099158859944,-44.7188004827],[-12.63110545249943,-44.7188842137],[-12.63137090339944,-44.7200441004],[-12.63188137279944,-44.7233551434],[-12.63241463729944,-44.72558911180001],[-12.63236985339944,-44.7274229792],[-12.63256808119944,-44.7291926776],[-12.63393418369943,-44.73503414480001],[-12.63487030739943,-44.7373681709],[-12.63500704869943,-44.73756051849999],[-12.63539320849944,-44.73773342870001],[-12.63752347969943,-44.7383197641],[-12.63797547539944,-44.7384809969],[-12.63806296189944,-44.73858003230001],[-12.63763500647669,-44.74840213335482],[-12.62293180819944,-44.7428038449],[-12.62242161909944,-44.7392451999],[-12.62128876819944,-44.733069227],[-12.61960889539412,-44.72163577597392]]},{"nome":"Lote 11","coords":[[-12.65002128296159,-44.73729604426946],[-12.65053107087295,-44.71096725219549],[-12.66147352131965,-44.70905980521112],[-12.66140366411536,-44.73622652619877],[-12.65002128296159,-44.73729604426946]]},{"nome":"Lote OV","coords":[[-12.69592376192235,-44.70298236875287],[-12.6962191374546,-44.70294663139416],[-12.69627379979945,-44.703032435],[-12.69845724629945,-44.7109022864],[-12.69830504299946,-44.7110630978],[-12.68983276039944,-44.71343343520001],[-12.69205801809944,-44.7215798514],[-12.69214764519945,-44.7222220443],[-12.68563084389946,-44.723247652],[-12.68398562889946,-44.7234763863],[-12.68361319139945,-44.72345718679999],[-12.67997121289945,-44.7115406492],[-12.67993260279946,-44.7112250597],[-12.67964222909945,-44.71045252030001],[-12.67883906269946,-44.7076118829],[-12.67855962549944,-44.70687520620002],[-12.67845540499946,-44.7063340509],[-12.67830695577902,-44.7060616117475],[-12.69592376192235,-44.70298236875287]]},{"nome":"Lote 04","coords":[[-12.62865581088009,-44.77354580482],[-12.6387837541168,-44.76111026534565],[-12.62942822960341,-44.75727378402331],[-12.61817852673804,-44.76770192147338],[-12.62865581088009,-44.77354580482]]},{"nome":"Lote 03","coords":[[-12.61858014263228,-44.78591545524444],[-12.62863229088178,-44.77357468172164],[-12.61815024135648,-44.76772813951847],[-12.61620319549943,-44.7695235095],[-12.61598726359942,-44.76954781700001],[-12.61549203749943,-44.768651807],[-12.61503240209944,-44.76848826780002],[-12.61498825529943,-44.76794702640001],[-12.61363174579944,-44.7659252331],[-12.61346544099943,-44.76586263079999],[-12.61265840119944,-44.76670323060001],[-12.61166637219945,-44.7679894104],[-12.60988477279944,-44.76975440540002],[-12.60816066739943,-44.77184846940001],[-12.60633462359944,-44.77385912420001],[-12.60578430249943,-44.77452552940001],[-12.60572094779943,-44.7747404011],[-12.61282931899944,-44.7811976304],[-12.61779781059943,-44.78558746619999],[-12.61833342639944,-44.78603609580001],[-12.61846427969943,-44.7860296728],[-12.61858014263228,-44.78591545524444]]},{"nome":"Lote 13","coords":[[-12.64645006819134,-44.76415510186385],[-12.64993230656016,-44.75312584848037],[-12.66547573618355,-44.75901034338358],[-12.66562682960319,-44.75912472052566],[-12.66576346205958,-44.75939050963118],[-12.67179444229991,-44.77406084514015],[-12.67170191916597,-44.77413810641429],[-12.67153090004835,-44.77410812032447],[-12.66379669144275,-44.77126966317523],[-12.64645006819134,-44.76415510186385]]},{"nome":"Lote 07","coords":[[-12.60231090118085,-44.71322560999316],[-12.60261056003909,-44.71828156057445],[-12.60275006280995,-44.7185443956152],[-12.61073705892479,-44.71717692292047],[-12.61093262016335,-44.7171079758817],[-12.61102491939817,-44.71696209367735],[-12.61049218481626,-44.6724123304969],[-12.61039886106803,-44.6721069253578],[-12.60043848897261,-44.67490464712151],[-12.60026694964684,-44.6750611386073],[-12.60186438207237,-44.69907520423458],[-12.60229241738286,-44.7128012896008],[-12.60239975129942,-44.71301227299999],[-12.60231090118085,-44.71322560999316]]},{"nome":"Lote 14","coords":[[-12.65358908153706,-44.73702555205617],[-12.6528237345473,-44.75415164960526],[-12.66553787301136,-44.75894986725899],[-12.66574952661956,-44.7589018321554],[-12.66597529874645,-44.75868058454034],[-12.6721910552343,-44.75143792717157],[-12.67226254073012,-44.75101958720611],[-12.67181926979655,-44.748452579129],[-12.67192668870821,-44.74707556860867],[-12.67232321896297,-44.74575781095822],[-12.67300054253549,-44.74504858919238],[-12.67342354353612,-44.74488793044364],[-12.67652920164307,-44.74423795929986],[-12.67852564480523,-44.74393705647795],[-12.68126160667053,-44.74089560078844],[-12.68741038937732,-44.74228352067554],[-12.68965432938839,-44.74216020444526],[-12.69052733251405,-44.74229943821213],[-12.69071601374963,-44.74224169207429],[-12.69079757510847,-44.7420807804232],[-12.6895359249225,-44.73421518170086],[-12.68943180519923,-44.73385381253256],[-12.68913818924721,-44.73372395473695],[-12.65358908153706,-44.73702555205617]]},{"nome":"Lote 09","coords":[[-12.64993230656016,-44.75312584848037],[-12.64645006819134,-44.76415510186385],[-12.62759107322593,-44.75642222366891],[-12.6274736780413,-44.75629255904923],[-12.62753874043421,-44.7561062934681],[-12.63451045499943,-44.74730292050001],[-12.64993230656016,-44.75312584848037]]},{"nome":"Lote G1","coords":[[-12.57613618095761,-44.72096997303191],[-12.56608976679942,-44.7204440056],[-12.56592828549942,-44.72052576320002],[-12.56586526009942,-44.72070506290002],[-12.56594695589942,-44.72107858080001],[-12.56587806419942,-44.72145505469999],[-12.56596655149943,-44.72167440580001],[-12.57685993809943,-44.73492703320001],[-12.57711509959944,-44.73503523440001],[-12.57858837029944,-44.73523559860002],[-12.57898269728143,-44.73536761418404],[-12.58019866329942,-44.7368443288],[-12.58047692279941,-44.7370303474],[-12.58454412179942,-44.73732156],[-12.58739814555917,-44.73726947850721],[-12.58770547212656,-44.73737373057211],[-12.58798123297301,-44.73769481469482],[-12.57613618095761,-44.72096997303191]]}];
+</script>
+<script>
+// ════════════════════════════════════════════════
+//  DADOS
+// ════════════════════════════════════════════════
+const TORRE = { lat: -12.60508916835879, lon: -44.71944199316121 };
+const ESTACOES_BASE = [
+  {id:1, lat:-12.59045924976502, lon:-44.72410078075448},
+  {id:2, lat:-12.57909222822474, lon:-44.73532854467978},
+  {id:3, lat:-12.59016627721593, lon:-44.74064096741357},
+  {id:4, lat:-12.60191787886315, lon:-44.75782735806142},
+  {id:5, lat:-12.61880160026599, lon:-44.76675636565938},
+  {id:6, lat:-12.62696264379047, lon:-44.75633165811966},
+  {id:7, lat:-12.64988327040047, lon:-44.75330858738376},
+  {id:8, lat:-12.6380834161671,  lon:-44.73839367370822},
+  {id:9, lat:-12.63726987520251, lon:-44.71686951951865},
+  {id:10,lat:-12.64547238784063, lon:-44.69078931671315},
+  {id:11,lat:-12.65581231668188, lon:-44.73950505276849},
+  {id:12,lat:-12.65623636348734, lon:-44.7270957051493},
+  {id:13,lat:-12.65666722832923, lon:-44.71616317614935},
+  {id:14,lat:-12.67174314054665, lon:-44.75092594336441},
+  {id:15,lat:-12.67706873403958, lon:-44.71601703518478},
+  {id:16,lat:-12.69377515414392, lon:-44.73685245901962},
+  {id:17,lat:-12.61052377314079, lon:-44.74300141066415},
+  {id:18,lat:-12.61985892503336, lon:-44.72233544616861},
+  {id:19,lat:-12.61007120178669, lon:-44.69299685356317},
+  {id:20,lat:-12.60036036238259, lon:-44.67511804951111}
+];
+
+// ════════════════════════════════════════════════
+//  GRADIENTE METEOROLÓGICO (opção B do usuário)
+//  roxo → azul → ciano → verde → amarelo → laranja → vermelho → vermelho escuro
+// ════════════════════════════════════════════════
+const GRAD_METEOR = [
+  [88, 28, 135],    // roxo profundo
+  [49, 46, 129],    // azul-roxo
+  [37, 99, 235],    // azul forte
+  [14, 165, 233],   // azul céu
+  [6, 182, 212],    // ciano
+  [16, 185, 129],   // verde
+  [132, 204, 22],   // verde-amarelado
+  [234, 179, 8],    // amarelo
+  [249, 115, 22],   // laranja
+  [239, 68, 68],    // vermelho
+  [153, 27, 27]     // vermelho escuro
+];
+
+// Variações por variável (a chuva usa só os tons azuis a roxos profundos)
+const GRAD_CHUVA = [
+  [241, 245, 249],  // quase branco
+  [186, 230, 253],  // azul muito claro
+  [125, 211, 252],  // azul claro
+  [56, 189, 248],   // azul ciano
+  [14, 165, 233],   // azul
+  [37, 99, 235],    // azul forte
+  [67, 56, 202],    // azul-roxo
+  [88, 28, 135],    // roxo
+  [76, 5, 80]       // roxo escuro
+];
+
+function getGradiente(variavel) {
+  return variavel === 'chuva' ? GRAD_CHUVA : GRAD_METEOR;
+}
+
+function corPorValor(v, varName) {
+  const ranges = {
+    temp: [18, 34], umid: [20, 100], pres: [1005, 1025],
+    chuva: [0, getMaxChuva()]
+  };
+  let [min, max] = ranges[varName];
+  // umidade e pressão: invertem (mais alto = azul ao invés de vermelho)
+  // Para soja faz sentido: alta umidade = "ruim" (doença), baixa = "ruim" (seca)
+  // Vamos manter direção natural: mais alto = mais "quente" no gradiente
+  let norm = Math.max(0, Math.min(1, (v - min) / (max - min)));
+  if (varName === 'umid') norm = 1 - norm; // inverte umidade pra ficar intuitivo
+
+  const grad = getGradiente(varName);
+  const pos = norm * (grad.length - 1);
+  const i0 = Math.floor(pos);
+  const i1 = Math.min(grad.length - 1, i0 + 1);
+  const t = pos - i0;
+  return [
+    Math.round(grad[i0][0]*(1-t) + grad[i1][0]*t),
+    Math.round(grad[i0][1]*(1-t) + grad[i1][1]*t),
+    Math.round(grad[i0][2]*(1-t) + grad[i1][2]*t)
+  ];
+}
+
+function gradCSS(variavel) {
+  const grad = getGradiente(variavel);
+  let parts = grad.map((c,i) => `rgb(${c[0]},${c[1]},${c[2]}) ${(i/(grad.length-1))*100}%`);
+  if (variavel === 'umid') parts = parts.reverse().map((p,i) => p.replace(/\s\d+(\.\d+)?%/, ` ${(i/(grad.length-1))*100}%`));
+  return `linear-gradient(90deg, ${parts.join(',')})`;
+}
+
+// ════════════════════════════════════════════════
+//  SIMULAÇÃO
+// ════════════════════════════════════════════════
+let simPhase = 0;
+let estacoes = [];
+
+function gerarDados() {
+  return ESTACOES_BASE.map((e, idx) => {
+    const latOff = (e.lat + 12.65) * 6;
+    const lonOff = (e.lon + 44.73) * 4;
+    const noise = (Math.sin(simPhase + idx*0.6) + Math.cos(simPhase*1.3 + idx*0.4)) * 1.2;
+    const temp = 26 + Math.sin(simPhase*0.4) * 3 + latOff + noise;
+    const umid = 65 - latOff*2 + Math.cos(simPhase*0.5 + idx) * 8 + lonOff*3;
+    const pres = 1013 + Math.sin(simPhase*0.2 + idx*0.1) * 4;
+    const ventoVel = Math.max(0, Math.min(22, 8 + Math.sin(simPhase*0.7 + idx*0.3) * 6 + Math.sin(simPhase*1.7 + idx)*1.5));
+    const ventoDir = (Math.sin(simPhase*0.2) * 90 + 120 + idx*4) % 360;
+    const chuva24h = Math.max(0, 5 + Math.sin(simPhase*0.3 + idx*0.5)*8 + latOff*3);
+    const chuva7d = chuva24h * 3.5 + Math.sin(idx)*15 + 20;
+    const chuva30d = chuva7d * 3.2 + 40;
+    const chuvaSafra = chuva30d * 4 + 80;
+    const solo = 45 + Math.sin(simPhase*0.3 + idx) * 15 + lonOff*5;
+    const bateria = 12.4 + Math.sin(simPhase*0.1 + idx) * 0.3;
+    const hops = (idx === 13 || idx === 14) ? 2 : (idx === 6 || idx === 10) ? 1 : 0;
+    return {
+      ...e,
+      nome: `Estação ${String(e.id).padStart(2,'0')}`,
+      temp:+temp.toFixed(1), umid:+Math.max(20,Math.min(100,umid)).toFixed(0),
+      pres:+pres.toFixed(1), ventoVel:+ventoVel.toFixed(1),
+      ventoDir:+ventoDir.toFixed(0),
+      chuva24h:+chuva24h.toFixed(1), chuva7d:+chuva7d.toFixed(1),
+      chuva30d:+chuva30d.toFixed(1), chuvaSafra:+chuvaSafra.toFixed(1),
+      solo:+Math.max(0,Math.min(100,solo)).toFixed(0),
+      bateria:+bateria.toFixed(2), hops, rssi:-70-Math.floor(Math.random()*40),
+      online: idx !== 15 || Math.random() > 0.3
+    };
+  });
+}
+
+estacoes = gerarDados();
+
+// ════════════════════════════════════════════════
+//  ESTADO
+// ════════════════════════════════════════════════
+let varAtiva = 'temp';
+let camadas = { lotes: true, estacoes: true, heatmap: true, vento: false };
+let heatmapStyle = 'interp';
+let ventoStyle = 'part-rastro';
+let periodo = '24h';
+let estacaoSel = null;
+let panelTab = 'overview';
+let isPlaying = false;
+
+// ════════════════════════════════════════════════
+//  MAPA
+// ════════════════════════════════════════════════
+const map = L.map('map', { zoomControl: false, attributionControl: true })
+  .setView([-12.635, -44.72], 12);
+
+function createTile(primaryUrl, fallbackUrl, attr) {
+  const layer = L.tileLayer(primaryUrl, { attribution: attr, maxZoom: 19 });
+  let errorCount = 0;
+  layer.on('tileerror', () => {
+    errorCount++;
+    if (errorCount > 3) {
+      map.removeLayer(layer);
+      L.tileLayer(fallbackUrl, { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(map);
+    }
+  });
+  return layer;
+}
+
+const OSM = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+const tileLayers = {
+  satellite: createTile('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', OSM, '© Esri'),
+  hybrid: createTile('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', OSM, '© Google Hybrid'),
+  terrain: createTile('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', OSM, '© Esri Topo'),
+  streets: L.tileLayer(OSM, { attribution: '© OpenStreetMap', maxZoom: 19 })
+};
+
+let tileAtual = tileLayers.satellite.addTo(map);
+
+document.querySelectorAll('.map-type button').forEach(btn => {
+  bindTouch(btn, () => {
+    if (tileAtual) map.removeLayer(tileAtual);
+    tileAtual = tileLayers[btn.dataset.tile].addTo(map);
+    document.querySelectorAll('.map-type button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+function bindTouch(el, handler) {
+  let touched = false;
+  el.addEventListener('touchstart', (e) => { touched = true; e.stopPropagation(); }, { passive: true });
+  el.addEventListener('touchend', (e) => {
+    if (touched) { e.preventDefault(); e.stopPropagation(); handler(e); touched = false; }
+  });
+  el.addEventListener('click', (e) => { if (!touched) handler(e); touched = false; });
+}
+
+// ════════════════════════════════════════════════
+//  LOTES
+// ════════════════════════════════════════════════
+const lotesLayer = L.layerGroup();
+LOTES.forEach(lote => {
+  const poly = L.polygon(lote.coords, {
+    color: '#34d399', weight: 2, opacity: 0.9,
+    fillColor: '#34d399', fillOpacity: 0.05
+  });
+  poly.bindTooltip(lote.nome, { sticky: true, className: 'lote-tooltip' });
+  lotesLayer.addLayer(poly);
+});
+lotesLayer.addTo(map);
+
+function centroideLote(coords) {
+  let lat=0, lon=0;
+  coords.forEach(c => { lat += c[0]; lon += c[1]; });
+  return [lat/coords.length, lon/coords.length];
+}
+const loteCentroids = {};
+LOTES.forEach(l => loteCentroids[l.nome] = centroideLote(l.coords));
+
+function calcFazendaBBox() {
+  let minLat=999, maxLat=-999, minLon=999, maxLon=-999;
+  LOTES.forEach(l => l.coords.forEach(c => {
+    if (c[0] < minLat) minLat = c[0];
+    if (c[0] > maxLat) maxLat = c[0];
+    if (c[1] < minLon) minLon = c[1];
+    if (c[1] > maxLon) maxLon = c[1];
+  }));
+  return { minLat, maxLat, minLon, maxLon };
+}
+const fazendaBBox = calcFazendaBBox();
+
+function pointInPoly(lat, lon, coords) {
+  let inside = false;
+  for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
+    const xi = coords[i][0], yi = coords[i][1];
+    const xj = coords[j][0], yj = coords[j][1];
+    const intersect = ((yi > lon) !== (yj > lon)) &&
+      (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Distância mínima de um ponto até a borda de um polígono (em graus)
+function distToPolyEdge(lat, lon, coords) {
+  let minDist = Infinity;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const d = pointToSegmentDist(lat, lon, coords[i][0], coords[i][1], coords[i+1][0], coords[i+1][1]);
+    if (d < minDist) minDist = d;
+  }
+  return minDist;
+}
+
+function pointToSegmentDist(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const lenSq = dx*dx + dy*dy;
+  let t = 0;
+  if (lenSq > 0) t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const cx = x1 + t * dx, cy = y1 + t * dy;
+  return Math.sqrt((px-cx)**2 + (py-cy)**2);
+}
+
+function pontoNaFazenda(lat, lon) {
+  for (const lote of LOTES) {
+    if (pointInPoly(lat, lon, lote.coords)) return true;
+  }
+  return false;
+}
+
+// Retorna alpha baseado em proximidade da borda (antialias)
+function alphaAntialias(lat, lon) {
+  // Threshold em graus (~30m)
+  const THRESH = 0.0003;
+  let dentro = false;
+  let minDistBorda = Infinity;
+  for (const lote of LOTES) {
+    if (pointInPoly(lat, lon, lote.coords)) {
+      dentro = true;
+      const d = distToPolyEdge(lat, lon, lote.coords);
+      if (d < minDistBorda) minDistBorda = d;
+    }
+  }
+  if (!dentro) {
+    // Verifica se está MUITO próximo (fade externo)
+    for (const lote of LOTES) {
+      const d = distToPolyEdge(lat, lon, lote.coords);
+      if (d < THRESH) {
+        return Math.max(0, 1 - (d / THRESH)) * 0.5;
+      }
+    }
+    return 0;
+  }
+  // Dentro: fade na borda interna
+  if (minDistBorda < THRESH) {
+    return 0.5 + (minDistBorda / THRESH) * 0.5;
+  }
+  return 1.0;
+}
+
+// ════════════════════════════════════════════════
+//  ESTAÇÕES
+// ════════════════════════════════════════════════
+const estacoesLayer = L.layerGroup();
+const torreMarker = L.marker([TORRE.lat, TORRE.lon], {
+  icon: L.divIcon({
+    className: 'station-marker',
+    html: '<div class="marker-torre">G</div>',
+    iconSize: [42, 42], iconAnchor: [21, 21]
+  })
+});
+torreMarker.bindPopup(`<div class="popup-title">📡 Gateway — Torre 40m</div>
+  <div class="popup-grid">
+    <span class="popup-key">Estações ativas</span><span class="popup-val">19/20</span>
+    <span class="popup-key">Pacotes/min</span><span class="popup-val">23</span>
+    <span class="popup-key">Uptime</span><span class="popup-val">47d 12h</span>
+  </div>`);
+estacoesLayer.addLayer(torreMarker);
+
+const stationMarkers = {};
+
+function getMaxChuva() {
+  if (periodo === 'live' || periodo === '24h') return 30;
+  if (periodo === '7d') return 80;
+  if (periodo === '30d') return 200;
+  return 600;
+}
+
+function chuvaPorPeriodo(e) {
+  if (periodo === 'live' || periodo === '24h') return e.chuva24h;
+  if (periodo === '7d') return e.chuva7d;
+  if (periodo === '30d') return e.chuva30d;
+  return e.chuvaSafra;
+}
+
+function getValor(e, v) {
+  if (v === 'temp') return e.temp;
+  if (v === 'umid') return e.umid;
+  if (v === 'pres') return e.pres;
+  if (v === 'chuva') return chuvaPorPeriodo(e);
+}
+
+function corHex(rgb) {
+  return '#' + rgb.map(c => c.toString(16).padStart(2,'0')).join('');
+}
+
+estacoes.forEach(e => {
+  const cor = corHex(corPorValor(getValor(e, varAtiva), varAtiva));
+  const marker = L.marker([e.lat, e.lon], {
+    icon: L.divIcon({
+      className: 'station-marker',
+      html: `<div class="marker-circle" style="background:${cor}">${e.id}</div>`,
+      iconSize: [30, 30], iconAnchor: [15, 15]
+    })
+  });
+  marker.bindPopup(criarPopup(e));
+  marker.on('click', () => {
+    estacaoSel = e.id;
+    setPanelTab('overview');
+    openPanel();
+  });
+  estacoesLayer.addLayer(marker);
+  stationMarkers[e.id] = marker;
+});
+estacoesLayer.addTo(map);
+
+function criarPopup(e) {
+  return `<div class="popup-title">${e.nome}</div>
+  <div class="popup-grid">
+    <span class="popup-key">Temperatura</span><span class="popup-val">${e.temp}°C</span>
+    <span class="popup-key">Umidade</span><span class="popup-val">${e.umid}%</span>
+    <span class="popup-key">Pressão</span><span class="popup-val">${e.pres} hPa</span>
+    <span class="popup-key">Vento</span><span class="popup-val">${e.ventoVel} km/h ${dirNome(e.ventoDir)}</span>
+    <span class="popup-key">Chuva ${periodo}</span><span class="popup-val">${chuvaPorPeriodo(e)} mm</span>
+    <span class="popup-key">Solo</span><span class="popup-val">${e.solo}%</span>
+    <span class="popup-key">Bateria</span><span class="popup-val">${e.bateria}V</span>
+    <span class="popup-key">Saltos</span><span class="popup-val">${e.hops}</span>
+  </div>`;
+}
+
+function dirNome(graus) {
+  const dirs = ['N','NE','L','SE','S','SO','O','NO'];
+  return dirs[Math.round(graus / 45) % 8];
+}
+
+// ════════════════════════════════════════════════
+//  HEATMAP — 280×280 + ANTIALIAS + OPACIDADE 0.85
+// ════════════════════════════════════════════════
+const heatmapLayer = L.layerGroup();
+
+function renderizarHeatmap() {
+  heatmapLayer.clearLayers();
+  if (!camadas.heatmap) return;
+  if (heatmapStyle === 'lote') renderHeatmapPorLote();
+  else renderHeatmapInterpolado();
+  heatmapLayer.addTo(map);
+}
+
+function renderHeatmapInterpolado() {
+  const GRID = 280; // resolução dobrada
+  const bb = fazendaBBox;
+  const dLat = (bb.maxLat - bb.minLat) / GRID;
+  const dLon = (bb.maxLon - bb.minLon) / GRID;
+  const canvas = document.createElement('canvas');
+  canvas.width = GRID;
+  canvas.height = GRID;
+  const ctx = canvas.getContext('2d');
+  const imgData = ctx.createImageData(GRID, GRID);
+
+  for (let i = 0; i < GRID; i++) {
+    for (let j = 0; j < GRID; j++) {
+      const lat = bb.maxLat - i * dLat;
+      const lon = bb.minLon + j * dLon;
+      const idx = (i * GRID + j) * 4;
+
+      const alpha = alphaAntialias(lat, lon);
+      if (alpha < 0.01) { imgData.data[idx+3] = 0; continue; }
+
+      // IDW
+      let num = 0, den = 0;
+      for (const e of estacoes) {
+        const d2 = (lat-e.lat)**2 + (lon-e.lon)**2;
+        if (d2 < 1e-10) { num = getValor(e, varAtiva); den = 1; break; }
+        const w = 1 / (d2 + 1e-8);
+        num += w * getValor(e, varAtiva);
+        den += w;
+      }
+      const v = num/den;
+      const rgb = corPorValor(v, varAtiva);
+      imgData.data[idx] = rgb[0];
+      imgData.data[idx+1] = rgb[1];
+      imgData.data[idx+2] = rgb[2];
+      imgData.data[idx+3] = Math.round(255 * alpha);
+    }
+  }
+  ctx.putImageData(imgData, 0, 0);
+  const corners = [[bb.minLat, bb.minLon], [bb.maxLat, bb.maxLon]];
+  // OPACIDADE 0.85
+  heatmapLayer.addLayer(L.imageOverlay(canvas.toDataURL(), corners, { opacity: 0.85 }));
+}
+
+function renderHeatmapPorLote() {
+  LOTES.forEach(lote => {
+    const c = loteCentroids[lote.nome];
+    const proximas = estacoes
+      .map(e => ({...e, d: (e.lat-c[0])**2 + (e.lon-c[1])**2}))
+      .sort((a,b) => a.d - b.d).slice(0, 3);
+    const totalW = proximas.reduce((s, e) => s + 1/(e.d+1e-8), 0);
+    const v = proximas.reduce((s, e) => s + getValor(e, varAtiva)/(e.d+1e-8), 0) / totalW;
+    const cor = corHex(corPorValor(v, varAtiva));
+    const poly = L.polygon(lote.coords, {
+      color: cor, weight: 1.5, opacity: 0.9,
+      fillColor: cor, fillOpacity: 0.85  // OPACIDADE 0.85
+    });
+    poly.bindTooltip(`<strong>${lote.nome}</strong><br>${labelVar(varAtiva)}: ${v.toFixed(1)}${unidVar(varAtiva)}`, { sticky: true, className: 'lote-tooltip' });
+    heatmapLayer.addLayer(poly);
+  });
+}
+
+function labelVar(v) {
+  return { temp:'Temp', umid:'Umidade', pres:'Pressão', chuva:'Chuva' }[v];
+}
+function unidVar(v) {
+  return { temp:'°C', umid:'%', pres:' hPa', chuva:' mm' }[v];
+}
+
+// ════════════════════════════════════════════════
+//  VENTO — APENAS PARTÍCULAS (com/sem rastro)
+//  Bug fix: clipping path mantém fade restrito à fazenda
+// ════════════════════════════════════════════════
+const ventoLayer = L.layerGroup();
+let particulas = [];
+let animFrameId = null;
+let ventoCanvasEl = null;
+let ventoCtx = null;
+let clipPathCache = null; // path2D dos lotes em coords de canvas
+
+function renderizarVento() {
+  ventoLayer.clearLayers();
+  pararAnimacao();
+
+  if (!camadas.vento) {
+    if (ventoCanvasEl) ventoCanvasEl.style.display = 'none';
+    return;
+  }
+
+  // Sempre partículas, com diferença apenas no rastro
+  inicializarParticulas();
+  iniciarAnimacao(ventoStyle);
+}
+
+function ventoInterpolado(lat, lon) {
+  let uSum=0, vSum=0, wSum=0;
+  for (const e of estacoes) {
+    const d2 = (lat-e.lat)**2 + (lon-e.lon)**2;
+    if (d2 < 1e-10) continue;
+    const w = 1 / d2;
+    const rad = (e.ventoDir - 90) * Math.PI / 180;
+    uSum += w * Math.cos(rad) * e.ventoVel;
+    vSum += w * Math.sin(rad) * e.ventoVel;
+    wSum += w;
+  }
+  if (wSum < 1e-10) return null;
+  return { u: uSum/wSum, v: vSum/wSum };
+}
+
+function corVento(vel) {
+  if (vel < 5) return '#94a3b8';
+  if (vel < 10) return '#34d399';
+  if (vel < 15) return '#fbbf24';
+  return '#ef4444';
+}
+
+// ════════════════════════════════════════════════
+//  CANVAS DE VENTO — implementação com clipping
+// ════════════════════════════════════════════════
+function configurarCanvas() {
+  ventoCanvasEl = document.getElementById('vento-canvas');
+  const mapArea = document.querySelector('.map-area');
+  const rect = mapArea.getBoundingClientRect();
+
+  const dpr = window.devicePixelRatio || 1;
+  ventoCanvasEl.width = rect.width * dpr;
+  ventoCanvasEl.height = rect.height * dpr;
+
+  ventoCanvasEl.style.width = rect.width + 'px';
+  ventoCanvasEl.style.height = rect.height + 'px';
+  ventoCanvasEl.style.display = 'block';
+
+  ventoCtx = ventoCanvasEl.getContext('2d');
+  ventoCtx.scale(dpr, dpr);
+
+  // Limpa explicitamente o canvas
+  ventoCtx.clearRect(0, 0, rect.width, rect.height);
+
+  // Pré-calcula o path de clipping (todos os lotes)
+  construirClipPath();
+
+  return { width: rect.width, height: rect.height };
+}
+
+function construirClipPath() {
+  clipPathCache = new Path2D();
+  for (const lote of LOTES) {
+    if (lote.coords.length < 3) continue;
+    let primeiro = true;
+    for (const c of lote.coords) {
+      const pt = map.latLngToContainerPoint([c[0], c[1]]);
+      if (primeiro) {
+        clipPathCache.moveTo(pt.x, pt.y);
+        primeiro = false;
+      } else {
+        clipPathCache.lineTo(pt.x, pt.y);
+      }
+    }
+    clipPathCache.closePath();
+  }
+}
+
+function inicializarParticulas() {
+  particulas = [];
+  const N = 400;
+  const bb = fazendaBBox;
+  for (let i = 0; i < N; i++) {
+    particulas.push(criarParticula(bb));
+  }
+}
+
+function criarParticula(bb) {
+  let lat, lon, tentativas = 0;
+  do {
+    lat = bb.minLat + Math.random() * (bb.maxLat - bb.minLat);
+    lon = bb.minLon + Math.random() * (bb.maxLon - bb.minLon);
+    tentativas++;
+  } while (!pontoNaFazenda(lat, lon) && tentativas < 20);
+  return {
+    lat, lon, prevLat: lat, prevLon: lon,
+    age: Math.floor(Math.random()*80),
+    maxAge: 80 + Math.floor(Math.random()*80)
+  };
+}
+
+function iniciarAnimacao(modo) {
+  const dims = configurarCanvas();
+  let lastT = performance.now();
+
+  // Garante canvas inicial 100% transparente
+  ventoCtx.clearRect(0, 0, dims.width, dims.height);
+
+  function loop(t) {
+    // CAP RÍGIDO: evita saltos quando navegador trava ou perde foco
+    const dt = Math.min(t - lastT, 33);
+    lastT = t;
+
+    if (!ventoCtx) { animFrameId = null; return; }
+
+    if (modo === 'part-rastro') {
+      // FIX DO FUNDO PRETO SOBRE HEATMAP:
+      // Em vez de pintar preto semi-transparente (que se acumulava sobre o heatmap),
+      // usamos destination-out para APAGAR o canvas gradualmente.
+      // Isso mantém o efeito de rastro sem manchar o que está atrás.
+      ventoCtx.save();
+      ventoCtx.clip(clipPathCache);
+      ventoCtx.globalCompositeOperation = 'destination-out';
+      ventoCtx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+      ventoCtx.fillRect(0, 0, dims.width, dims.height);
+      ventoCtx.globalCompositeOperation = 'source-over';
+      ventoCtx.restore();
+      desenharParticulasRastro(dt);
+    } else {
+      // Modo sem rastro: limpa tudo a cada frame e desenha
+      ventoCtx.clearRect(0, 0, dims.width, dims.height);
+      desenharParticulasPuras(dt);
+    }
+
+    animFrameId = requestAnimationFrame(loop);
+  }
+
+  animFrameId = requestAnimationFrame(loop);
+}
+
+function pararAnimacao() {
+  if (animFrameId) {
+    cancelAnimationFrame(animFrameId);
+    animFrameId = null;
+  }
+  if (ventoCtx && ventoCanvasEl) {
+    ventoCtx.clearRect(0, 0, ventoCanvasEl.width, ventoCanvasEl.height);
+  }
+}
+
+// VELOCIDADE: reduzida pela metade conforme pedido (0.000004 → 0.000002)
+const VELOCIDADE_PARTICULA = 0.000002;
+
+function desenharParticulasRastro(dt) {
+  const bb = fazendaBBox;
+  const stepFactor = VELOCIDADE_PARTICULA * Math.min(dt, 50);
+
+  ventoCtx.save();
+  ventoCtx.clip(clipPathCache); // partículas também só desenham dentro
+
+  for (const p of particulas) {
+    const vec = ventoInterpolado(p.lat, p.lon);
+    if (!vec) {
+      Object.assign(p, criarParticula(bb));
+      continue;
+    }
+
+    p.prevLat = p.lat;
+    p.prevLon = p.lon;
+    p.lon += vec.u * stepFactor;
+    p.lat += vec.v * stepFactor;
+    p.age++;
+
+    if (p.age > p.maxAge || !pontoNaFazenda(p.lat, p.lon)) {
+      Object.assign(p, criarParticula(bb));
+      continue;
+    }
+
+    const pt = map.latLngToContainerPoint([p.lat, p.lon]);
+    const ptPrev = map.latLngToContainerPoint([p.prevLat, p.prevLon]);
+    const mag = Math.sqrt(vec.u*vec.u + vec.v*vec.v);
+
+    ventoCtx.strokeStyle = corVento(mag);
+    ventoCtx.lineWidth = 1.4;
+    ventoCtx.globalAlpha = 0.9;
+    ventoCtx.beginPath();
+    ventoCtx.moveTo(ptPrev.x, ptPrev.y);
+    ventoCtx.lineTo(pt.x, pt.y);
+    ventoCtx.stroke();
+  }
+  ventoCtx.globalAlpha = 1;
+  ventoCtx.restore();
+}
+
+function desenharParticulasPuras(dt) {
+  const bb = fazendaBBox;
+  const stepFactor = VELOCIDADE_PARTICULA * Math.min(dt, 50);
+
+  ventoCtx.save();
+  ventoCtx.clip(clipPathCache);
+
+  for (const p of particulas) {
+    const vec = ventoInterpolado(p.lat, p.lon);
+    if (!vec) {
+      Object.assign(p, criarParticula(bb));
+      continue;
+    }
+
+    p.lon += vec.u * stepFactor;
+    p.lat += vec.v * stepFactor;
+    p.age++;
+
+    if (p.age > p.maxAge || !pontoNaFazenda(p.lat, p.lon)) {
+      Object.assign(p, criarParticula(bb));
+      continue;
+    }
+
+    const pt = map.latLngToContainerPoint([p.lat, p.lon]);
+    const mag = Math.sqrt(vec.u*vec.u + vec.v*vec.v);
+
+    // Ponto sólido brilhante (sem rastro)
+    ventoCtx.fillStyle = corVento(mag);
+    ventoCtx.globalAlpha = 0.95;
+    ventoCtx.beginPath();
+    ventoCtx.arc(pt.x, pt.y, 2, 0, Math.PI*2);
+    ventoCtx.fill();
+  }
+  ventoCtx.globalAlpha = 1;
+  ventoCtx.restore();
+}
+
+// Quando o mapa muda, refaz tudo
+map.on('moveend zoomend', () => {
+  if (camadas.vento) {
+    pararAnimacao();
+    setTimeout(() => {
+      inicializarParticulas();
+      iniciarAnimacao(ventoStyle);
+    }, 80);
+  }
+});
+
+window.addEventListener('resize', () => {
+  if (camadas.vento) {
+    pararAnimacao();
+    setTimeout(() => {
+      inicializarParticulas();
+      iniciarAnimacao(ventoStyle);
+    }, 120);
+  }
+});
+
+// ════════════════════════════════════════════════
+//  CONTROLES
+// ════════════════════════════════════════════════
+document.querySelectorAll('.layer-btn').forEach(btn => {
+  bindTouch(btn, () => {
+    const layer = btn.dataset.layer;
+    camadas[layer] = !camadas[layer];
+    btn.classList.toggle('active');
+    aplicarCamadas();
+    atualizarSubControles();
+  });
+});
+
+document.querySelectorAll('.var-btn').forEach(btn => {
+  bindTouch(btn, () => {
+    varAtiva = btn.dataset.var;
+    document.querySelectorAll('.var-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    atualizarLegenda();
+    renderizarHeatmap();
+    atualizarMarcadores();
+  });
+});
+
+document.querySelectorAll('#heatmap-style-group .sub-btn').forEach(btn => {
+  bindTouch(btn, () => {
+    heatmapStyle = btn.dataset.hm;
+    document.querySelectorAll('#heatmap-style-group .sub-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderizarHeatmap();
+  });
+});
+
+document.querySelectorAll('#vento-style-group .sub-btn').forEach(btn => {
+  bindTouch(btn, () => {
+    ventoStyle = btn.dataset.vs;
+    document.querySelectorAll('#vento-style-group .sub-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderizarVento();
+  });
+});
+
+document.querySelectorAll('.period-pill').forEach(btn => {
+  bindTouch(btn, () => {
+    periodo = btn.dataset.period;
+    document.querySelectorAll('.period-pill').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    atualizarLegenda();
+    renderizarHeatmap();
+    atualizarMarcadores();
+    renderPanel();
+  });
+});
+
+document.querySelectorAll('.panel-tab').forEach(tab => {
+  bindTouch(tab, () => setPanelTab(tab.dataset.tab));
+});
+
+document.querySelectorAll('.nav-btn').forEach(btn => {
+  bindTouch(btn, () => {
+    const t = btn.dataset.nav;
+    if (t === 'map') closePanel();
+    else { setPanelTab(t === 'stations' ? 'stations' : t === 'lotes' ? 'lotes' : 'analise'); openPanel(); }
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+bindTouch(document.getElementById('zoom-in'), () => map.zoomIn());
+bindTouch(document.getElementById('zoom-out'), () => map.zoomOut());
+bindTouch(document.getElementById('play-btn'), togglePlay);
+bindTouch(document.getElementById('panel-close'), closePanel);
+
+const sliderInput = document.getElementById('slider-input');
+sliderInput.addEventListener('input', e => {
+  const v = e.target.value;
+  document.getElementById('slider-progress').style.width = v + '%';
+  document.getElementById('slider-thumb').style.left = v + '%';
+});
+
+function aplicarCamadas() {
+  if (camadas.lotes) { if (!map.hasLayer(lotesLayer)) lotesLayer.addTo(map); }
+  else map.removeLayer(lotesLayer);
+  if (camadas.estacoes) { if (!map.hasLayer(estacoesLayer)) estacoesLayer.addTo(map); }
+  else map.removeLayer(estacoesLayer);
+  renderizarHeatmap();
+  renderizarVento();
+}
+
+function atualizarSubControles() {
+  document.getElementById('heatmap-style-group').style.display = camadas.heatmap ? 'flex' : 'none';
+  // v7: vento sempre usa 'part-rastro' (rastro próprio), toggle removido
+  document.getElementById('vento-style-group').style.display = 'none';
+}
+
+function atualizarLegenda() {
+  const titles = {
+    temp:['18','34','Temperatura (°C)'],
+    umid:['20','100','Umidade (%)'],
+    pres:['1005','1025','Pressão (hPa)'],
+    chuva:['0', getMaxChuva()+'', `Chuva ${periodo} (mm)`]
+  };
+  const [min, max, title] = titles[varAtiva];
+  document.getElementById('legend-title').textContent = title;
+  document.getElementById('legend-min').textContent = min;
+  document.getElementById('legend-max').textContent = max;
+  document.getElementById('legend-gradient').style.background = gradCSS(varAtiva);
+}
+
+function atualizarMarcadores() {
+  estacoes.forEach(e => {
+    const m = stationMarkers[e.id];
+    if (!m) return;
+    const cor = corHex(corPorValor(getValor(e, varAtiva), varAtiva));
+    m.setIcon(L.divIcon({
+      className: 'station-marker',
+      html: `<div class="marker-circle" style="background:${cor}">${e.id}</div>`,
+      iconSize: [30, 30], iconAnchor: [15, 15]
+    }));
+    m.setPopupContent(criarPopup(e));
+  });
+}
+
+// ════════════════════════════════════════════════
+//  PAINEL
+// ════════════════════════════════════════════════
+function setPanelTab(tab) {
+  panelTab = tab;
+  document.querySelectorAll('.panel-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  renderPanel();
+}
+
+function renderPanel() {
+  const c = document.getElementById('panel-content');
+  if (panelTab === 'overview') {
+    c.innerHTML = renderOverview();
+    if (estacaoSel) setTimeout(renderMiniChart, 50);
+  } else if (panelTab === 'stations') {
+    c.innerHTML = renderStations();
+    bindStationItems();
+  } else if (panelTab === 'lotes') {
+    c.innerHTML = renderLotes();
+  } else {
+    c.innerHTML = renderAnalise();
+  }
+}
+
+function renderOverview() {
+  const ativas = estacoes.filter(e => e.online);
+  const avg = key => ativas.reduce((s,e) => s+e[key], 0) / ativas.length;
+  const chuvaKey = periodo === 'live' || periodo === '24h' ? 'chuva24h' : periodo === '7d' ? 'chuva7d' : periodo === '30d' ? 'chuva30d' : 'chuvaSafra';
+  const chuvaAvg = avg(chuvaKey);
+
+  let detalhe = '';
+  if (estacaoSel) {
+    const e = estacoes.find(s => s.id === estacaoSel);
+    if (e) {
+      detalhe = `<div class="panel-section">
+        <div class="panel-section-title">${e.nome} — detalhes</div>
+        <div class="stat-grid">
+          <div class="stat-card"><div class="stat-label">Temp</div><div class="stat-value">${e.temp}<span class="unit">°C</span></div></div>
+          <div class="stat-card"><div class="stat-label">Umidade</div><div class="stat-value">${e.umid}<span class="unit">%</span></div></div>
+          <div class="stat-card"><div class="stat-label">Vento</div><div class="stat-value">${e.ventoVel}<span class="unit">km/h ${dirNome(e.ventoDir)}</span></div></div>
+          <div class="stat-card"><div class="stat-label">Solo</div><div class="stat-value">${e.solo}<span class="unit">%</span></div></div>
+          <div class="stat-card wide"><div class="stat-label">Chuva ${periodo}</div><div class="stat-value">${chuvaPorPeriodo(e)}<span class="unit">mm</span></div></div>
+          <div class="stat-card wide">
+            <div class="stat-label">Histórico — temperatura</div>
+            <div class="mini-chart" id="mini-chart"></div>
+          </div>
+        </div>
+      </div>`;
+    }
+  }
+
+  return `<div class="panel-section">
+      <div class="panel-section-title">Fazenda — ${ativas.length} estações</div>
+      <div class="stat-grid">
+        <div class="stat-card wide">
+          <div class="stat-label">Período exibido</div>
+          <div style="font-size:14px;font-weight:600;margin-top:2px">Média ${labelPeriodo(periodo)}</div>
+        </div>
+        <div class="stat-card"><div class="stat-label">Temp média</div><div class="stat-value">${avg('temp').toFixed(1)}<span class="unit">°C</span></div></div>
+        <div class="stat-card"><div class="stat-label">Umidade</div><div class="stat-value">${avg('umid').toFixed(0)}<span class="unit">%</span></div></div>
+        <div class="stat-card"><div class="stat-label">Pressão</div><div class="stat-value">${avg('pres').toFixed(0)}<span class="unit">hPa</span></div></div>
+        <div class="stat-card"><div class="stat-label">Vento</div><div class="stat-value">${avg('ventoVel').toFixed(1)}<span class="unit">km/h</span></div></div>
+        <div class="stat-card wide">
+          <div class="stat-label">💧 Chuva acumulada ${periodo}</div>
+          <div class="stat-value">${chuvaAvg.toFixed(1)}<span class="unit">mm (média)</span></div>
+        </div>
+      </div>
+    </div>${detalhe}`;
+}
+
+function labelPeriodo(p) {
+  return { live:'tempo real', '24h':'24 horas', '7d':'7 dias', '30d':'30 dias', safra:'safra' }[p];
+}
+
+function renderStations() {
+  return `<div class="panel-section">
+      <div class="panel-section-title">Lista de estações</div>
+      <div class="station-list">
+        ${estacoes.map(e => `
+          <div class="station-item ${estacaoSel===e.id?'selected':''}" data-stid="${e.id}">
+            <span class="station-dot" style="color:${e.online?'#34d399':'#ef4444'};background:currentColor"></span>
+            <div class="station-info">
+              <div class="station-name">${e.nome}</div>
+              <div class="station-meta">Bat ${e.bateria}V · RSSI ${e.rssi}dBm · ${e.hops} hops</div>
+            </div>
+            <div class="station-temp">${e.temp}°</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function bindStationItems() {
+  document.querySelectorAll('.station-item[data-stid]').forEach(item => {
+    bindTouch(item, () => selecionarEstacao(+item.dataset.stid));
+  });
+}
+
+function renderLotes() {
+  const ordenados = [...LOTES].sort((a,b) => a.nome.localeCompare(b.nome));
+  return `<div class="panel-section">
+      <div class="panel-section-title">${LOTES.length} lotes mapeados</div>
+      <div class="station-list">
+        ${ordenados.map(l => {
+          const c = loteCentroids[l.nome];
+          const proximas = estacoes.map(e => ({...e, d: (e.lat-c[0])**2 + (e.lon-c[1])**2})).sort((a,b) => a.d - b.d).slice(0, 3);
+          const totalW = proximas.reduce((s,e) => s + 1/(e.d+1e-8), 0);
+          const t = proximas.reduce((s,e) => s + e.temp/(e.d+1e-8), 0)/totalW;
+          const u = proximas.reduce((s,e) => s + e.umid/(e.d+1e-8), 0)/totalW;
+          const ch = proximas.reduce((s,e) => s + chuvaPorPeriodo(e)/(e.d+1e-8), 0)/totalW;
+          return `<div class="station-item">
+              <span class="station-dot" style="color:#34d399;background:currentColor"></span>
+              <div class="station-info">
+                <div class="station-name">${l.nome}</div>
+                <div class="station-meta">${u.toFixed(0)}% umid · ${ch.toFixed(1)}mm chuva</div>
+              </div>
+              <div class="station-temp">${t.toFixed(1)}°</div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+function renderAnalise() {
+  return `<div class="panel-section">
+      <div class="panel-section-title">Métricas (simulado)</div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-label">GDD acumulado</div><div class="stat-value">428<span class="unit">°C·d</span></div></div>
+        <div class="stat-card"><div class="stat-label">Chuva ${periodo}</div><div class="stat-value">${(estacoes.reduce((s,e) => s+chuvaPorPeriodo(e), 0)/estacoes.length).toFixed(0)}<span class="unit">mm</span></div></div>
+        <div class="stat-card"><div class="stat-label">Evapotrans.</div><div class="stat-value">4.8<span class="unit">mm/d</span></div></div>
+        <div class="stat-card"><div class="stat-label">Balanço hídrico</div><div class="stat-value">−12<span class="unit">mm</span></div></div>
+      </div>
+    </div>
+    <div class="panel-section">
+      <div class="panel-section-title">Fenologia</div>
+      <div class="stat-card wide" style="padding:14px">
+        <div style="font-size:12px;color:var(--muted);line-height:1.6">
+          Soja em <strong style="color:var(--text)">R3</strong>.<br>
+          Avançados (norte): G1, 02, 03.<br>
+          Atrasados (sul): 14, 15, 16.
+        </div>
+      </div>
+    </div>`;
+}
+
+function selecionarEstacao(id) {
+  estacaoSel = id;
+  setPanelTab('overview');
+  const e = estacoes.find(s => s.id === id);
+  if (e) { map.setView([e.lat, e.lon], 14, { animate: true }); stationMarkers[id].openPopup(); }
+}
+
+function renderMiniChart() {
+  const el = document.getElementById('mini-chart');
+  if (!el || !estacaoSel) return;
+  const e = estacoes.find(s => s.id === estacaoSel);
+  if (!e) return;
+  const N = 48;
+  const data = [];
+  for (let i = 0; i < N; i++) {
+    const t = simPhase - (N-i)*0.1;
+    data.push(26 + Math.sin(t*0.4 + e.id*0.3)*3 + Math.sin(t*1.2)*0.8);
+  }
+  const w = el.clientWidth || 200, h = el.clientHeight || 80;
+  const min = Math.min(...data) - 1;
+  const max = Math.max(...data) + 1;
+  const pts = data.map((v,i) => {
+    const x = (i/(N-1))*w;
+    const y = h - ((v-min)/(max-min))*(h-10) - 5;
+    return `${x.toFixed(1)} ${y.toFixed(1)}`;
+  });
+  const linePath = 'M ' + pts.join(' L ');
+  const areaPath = linePath + ` L ${w} ${h} L 0 ${h} Z`;
+  el.innerHTML = `<svg class="chart-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <defs><linearGradient id="chart-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </linearGradient></defs>
+    <path d="${areaPath}" class="chart-area"/>
+    <path d="${linePath}" class="chart-line"/>
+  </svg>`;
+}
+
+function togglePlay() {
+  isPlaying = !isPlaying;
+  document.getElementById('play-btn').innerHTML = isPlaying ?
+    '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>' :
+    '<svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
+}
+
+function updateTime() {
+  const now = new Date();
+  document.getElementById('timeline-time').textContent =
+    now.toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}) + ' ' +
+    now.toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+}
+
+function openPanel() {
+  if (window.innerWidth <= 900) {
+    document.getElementById('panel').classList.add('open');
+  }
+}
+
+function closePanel() {
+  document.getElementById('panel').classList.remove('open');
+}
+
+const handle = document.getElementById('panel-handle');
+let dragStartY = 0;
+let isDragging = false;
+
+function handleStart(y) {
+  isDragging = true;
+  dragStartY = y;
+  const panel = document.getElementById('panel');
+  panel.style.transition = 'none';
+}
+
+function handleMove(y) {
+  if (!isDragging) return;
+  const dy = y - dragStartY;
+  const panel = document.getElementById('panel');
+  if (panel.classList.contains('open') && dy > 0) {
+    panel.style.transform = `translateY(${dy}px)`;
+  } else if (!panel.classList.contains('open') && dy < 0) {
+    panel.style.transform = `translateY(calc(100% - 60px + ${dy}px))`;
+  }
+}
+
+function handleEnd(y) {
+  if (!isDragging) return;
+  isDragging = false;
+  const panel = document.getElementById('panel');
+  panel.style.transition = '';
+  panel.style.transform = '';
+  const dy = y - dragStartY;
+  if (panel.classList.contains('open')) { if (dy > 80) closePanel(); }
+  else { if (dy < -50) openPanel(); }
+}
+
+handle.addEventListener('touchstart', (e) => { handleStart(e.touches[0].clientY); e.stopPropagation(); }, { passive: true });
+handle.addEventListener('touchmove', (e) => { handleMove(e.touches[0].clientY); e.preventDefault(); }, { passive: false });
+handle.addEventListener('touchend', (e) => { handleEnd(e.changedTouches[0].clientY); }, { passive: true });
+handle.addEventListener('mousedown', (e) => { handleStart(e.clientY); });
+document.addEventListener('mousemove', (e) => { if (isDragging) handleMove(e.clientY); });
+document.addEventListener('mouseup', (e) => { if (isDragging) handleEnd(e.clientY); });
+
+// ════════════════════════════════════════════════
+//  LOOP
+// ════════════════════════════════════════════════
+function tick() {
+  simPhase += isPlaying ? 0.1 : 0.02;
+  estacoes = gerarDados();
+  atualizarMarcadores();
+  if (camadas.heatmap) renderizarHeatmap();
+  // vento é animado continuamente pelo requestAnimationFrame, não precisa atualizar aqui
+  renderPanel();
+  updateTime();
+  document.getElementById('hdr-stats').textContent =
+    `${estacoes.filter(e=>e.online).length} ativas · 5.261 ha`;
+}
+
+setInterval(tick, 2500);
+
+atualizarLegenda();
+atualizarSubControles();
+renderizarHeatmap();
+renderPanel();
+updateTime();
+
+// ═══════════════════════════════════════════════════
+//  MOBILE v9 — Reescrita limpa e funcional
+// ═══════════════════════════════════════════════════
+(function() {
+  'use strict';
+
+  // Detecta se está em viewport mobile
+  const isMobile = () => window.matchMedia('(max-width: 900px)').matches;
+
+  // Estados
+  let compassOn = false;
+  let fullscreenOn = false;
+  let sheetAtivo = null;
+
+  // ----- Bind de toque otimizado (sem conflito com Leaflet) -----
+  function bindClick(el, handler) {
+    if (!el) return;
+    let started = false;
+    let startX = 0, startY = 0;
+
+    el.addEventListener('touchstart', (e) => {
+      started = true;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      e.stopPropagation();
+    }, { passive: true });
+
+    el.addEventListener('touchmove', (e) => {
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (Math.abs(dx) > 10 || Math.abs(dy) > 10) started = false;
+    }, { passive: true });
+
+    el.addEventListener('touchend', (e) => {
+      if (started) {
+        e.preventDefault();
+        e.stopPropagation();
+        handler(e);
+      }
+      started = false;
+    });
+
+    // Fallback click para desktop ou se touch falhar
+    el.addEventListener('click', (e) => {
+      if (e.isTrusted && !e.detail) return;
+      handler(e);
+    });
+  }
+
+  // ═══════ Bottom Sheets ═══════
+  const backdrop = document.getElementById('sheet-backdrop');
+
+  function abrirSheet(id) {
+    if (sheetAtivo) {
+      sheetAtivo.classList.remove('open');
+    }
+    const sheet = document.getElementById(id);
+    if (!sheet) return;
+    sheet.classList.add('open');
+    backdrop.classList.add('open');
+    sheetAtivo = sheet;
+
+  }
+
+  function fecharSheet() {
+    if (sheetAtivo) {
+      sheetAtivo.classList.remove('open');
+      sheetAtivo = null;
+    }
+    if (backdrop) backdrop.classList.remove('open');
+  }
+
+  if (backdrop) backdrop.addEventListener('click', fecharSheet);
+
+  // ═══════ FABs principais ═══════
+  bindClick(document.getElementById('fab-camadas'), () => abrirSheet('sheet-camadas'));
+  bindClick(document.getElementById('fab-variavel'), () => abrirSheet('sheet-variavel'));
+  bindClick(document.getElementById('fab-mapa'), () => abrirSheet('sheet-mapa'));
+  bindClick(document.getElementById('fab-config'), () => abrirSheet('sheet-config'));
+
+  bindClick(document.getElementById('fab-painel'), () => {
+    const panel = document.getElementById('panel');
+    if (panel) panel.classList.toggle('open');
+
+  });
+
+  bindClick(document.getElementById('fab-zoom-in'), () => { map.zoomIn(); });
+  bindClick(document.getElementById('fab-zoom-out'), () => { map.zoomOut(); });
+
+  // ═══════ Atualização visual dos FABs ═══════
+  function atualizarFabsAtivos() {
+    const fabCamadas = document.getElementById('fab-camadas');
+    const fabVar = document.getElementById('fab-variavel');
+    if (fabCamadas) {
+      fabCamadas.classList.toggle('active',
+        camadas.lotes || camadas.estacoes || camadas.heatmap || camadas.vento);
+    }
+    if (fabVar) {
+      fabVar.classList.toggle('active', camadas.heatmap || camadas.vento);
+    }
+  }
+
+  // ═══════ Sheet: Camadas (CONECTADO À FUNÇÃO REAL aplicarCamadas) ═══════
+  function popularSheetCamadas() {
+    const lista = document.getElementById('sheet-camadas-list');
+    if (!lista) return;
+    const itens = [
+      { key: 'lotes', label: 'Lotes' },
+      { key: 'estacoes', label: 'Estações' },
+      { key: 'heatmap', label: 'Mapa de calor' },
+      { key: 'vento', label: 'Vento' }
+    ];
+    lista.innerHTML = itens.map(it => `
+      <button class="sheet-item list-style ${camadas[it.key] ? 'active' : ''}" data-camada="${it.key}">
+        <span class="item-label">${it.label}</span>
+        <span class="item-check"></span>
+      </button>
+    `).join('');
+
+    lista.querySelectorAll('button').forEach(btn => {
+      bindClick(btn, () => {
+        const k = btn.dataset.camada;
+        camadas[k] = !camadas[k];
+        btn.classList.toggle('active', camadas[k]);
+
+        // Chama a função REAL que existe no dashboard
+        aplicarCamadas();
+        atualizarSubControles();
+
+        // Sincroniza com botões desktop
+        document.querySelectorAll('.layer-btn').forEach(b => {
+          if (b.dataset.layer === k) b.classList.toggle('active', camadas[k]);
+        });
+
+        atualizarFabsAtivos();
+        atualizarNomesLotes();
+    
+      });
+    });
+  }
+
+  // ═══════ Sheet: Variável ═══════
+  function popularSheetVariavel() {
+    const lista = document.getElementById('sheet-variavel-list');
+    if (!lista) return;
+    const vars = [
+      { key: 'temp', label: 'Temperatura' },
+      { key: 'umid', label: 'Umidade' },
+      { key: 'pres', label: 'Pressão' },
+      { key: 'chuva', label: 'Chuva acum.' }
+    ];
+    lista.innerHTML = vars.map(v => `
+      <button class="sheet-item ${varAtiva === v.key ? 'active' : ''}" data-var="${v.key}">
+        <span class="item-label">${v.label}</span>
+      </button>
+    `).join('');
+
+    lista.querySelectorAll('button').forEach(btn => {
+      bindClick(btn, () => {
+        varAtiva = btn.dataset.var;
+        lista.querySelectorAll('button').forEach(b =>
+          b.classList.toggle('active', b.dataset.var === varAtiva));
+        document.querySelectorAll('.var-btn').forEach(b =>
+          b.classList.toggle('active', b.dataset.var === varAtiva));
+        atualizarLegenda();
+        renderizarHeatmap();
+        atualizarMarcadores();
+    
+      });
+    });
+
+    // Estilos heatmap (só visível se heatmap ativo)
+    const wrap = document.getElementById('sheet-heatmap-style-wrap');
+    const listaHm = document.getElementById('sheet-heatmap-style-list');
+    if (wrap && listaHm) {
+      if (camadas.heatmap) {
+        wrap.style.display = 'block';
+        const estilos = [
+          { key: 'interp', label: 'Interpolado' },
+          { key: 'lote', label: 'Por lote' }
+        ];
+        listaHm.innerHTML = estilos.map(e => `
+          <button class="sheet-item ${heatmapStyle === e.key ? 'active' : ''}" data-hm="${e.key}">
+            <span class="item-label">${e.label}</span>
+          </button>
+        `).join('');
+        listaHm.querySelectorAll('button').forEach(btn => {
+          bindClick(btn, () => {
+            heatmapStyle = btn.dataset.hm;
+            listaHm.querySelectorAll('button').forEach(b =>
+              b.classList.toggle('active', b.dataset.hm === heatmapStyle));
+            renderizarHeatmap();
+        
+          });
+        });
+      } else {
+        wrap.style.display = 'none';
+      }
+    }
+  }
+
+  // ═══════ Sheet: Tipo de mapa ═══════
+  function popularSheetMapa() {
+    const lista = document.getElementById('sheet-mapa-list');
+    if (!lista) return;
+    const tipos = [
+      { key: 'satellite', label: 'Satélite' },
+      { key: 'hybrid', label: 'Híbrido' },
+      { key: 'terrain', label: 'Topo' },
+      { key: 'streets', label: 'Ruas' }
+    ];
+    // Detecta tile atual
+    let tipoAtivo = 'satellite';
+    for (const k in tileLayers) {
+      if (tileLayers[k] === tileAtual) tipoAtivo = k;
+    }
+    lista.innerHTML = tipos.map(t => `
+      <button class="sheet-item ${tipoAtivo === t.key ? 'active' : ''}" data-tile="${t.key}">
+        <span class="item-label">${t.label}</span>
+      </button>
+    `).join('');
+    lista.querySelectorAll('button').forEach(btn => {
+      bindClick(btn, () => {
+        const k = btn.dataset.tile;
+        if (tileAtual) map.removeLayer(tileAtual);
+        tileAtual = tileLayers[k].addTo(map);
+        lista.querySelectorAll('button').forEach(b =>
+          b.classList.toggle('active', b.dataset.tile === k));
+        document.querySelectorAll('.map-type button').forEach(b =>
+          b.classList.toggle('active', b.dataset.tile === k));
+    
+      });
+    });
+  }
+
+  // ═══════ Nomes dos lotes (centróide) ═══════
+  let nomesLotesLayer = null;
+
+  function calcularCentroidePoligono(coords) {
+    // Centróide simples (média) - rápido o suficiente
+    let sumLat = 0, sumLng = 0, n = 0;
+    coords.forEach(c => { sumLat += c[0]; sumLng += c[1]; n++; });
+    return n > 0 ? [sumLat / n, sumLng / n] : null;
+  }
+
+  function atualizarNomesLotes() {
+    // Remove anterior sempre
+    if (nomesLotesLayer) {
+      map.removeLayer(nomesLotesLayer);
+      nomesLotesLayer = null;
+    }
+
+    // Só mostra se: camada lotes ativa E zoom >= 13
+    if (!camadas.lotes) return;
+    if (map.getZoom() < 13) return;
+    if (typeof LOTES === 'undefined' || !LOTES.length) return;
+
+    nomesLotesLayer = L.layerGroup();
+    LOTES.forEach(lote => {
+      if (!lote.coords || !lote.coords.length) return;
+      const center = calcularCentroidePoligono(lote.coords);
+      if (!center) return;
+      const label = L.marker(center, {
+        icon: L.divIcon({
+          className: 'lote-name-label',
+          html: lote.nome || '',
+          iconSize: null,
+          iconAnchor: [0, 0]
+        }),
+        interactive: false,
+        keyboard: false
+      });
+      nomesLotesLayer.addLayer(label);
+    });
+    nomesLotesLayer.addTo(map);
+  }
+
+  // Atualiza ao mudar zoom (com debounce para performance)
+  let zoomTimer = null;
+  map.on('zoomend', () => {
+    clearTimeout(zoomTimer);
+    zoomTimer = setTimeout(atualizarNomesLotes, 100);
+  });
+
+  // ═══════ Tela cheia ═══════
+  function toggleFullscreen() {
+    fullscreenOn = !fullscreenOn;
+    document.body.classList.toggle('fullscreen', fullscreenOn);
+    const cfg = document.getElementById('cfg-fullscreen');
+    if (cfg) {
+      const check = cfg.querySelector('.item-check');
+      if (check) check.classList.toggle('active', fullscreenOn);
+    }
+    setTimeout(() => map.invalidateSize(), 320);
+
+  }
+
+  bindClick(document.getElementById('btn-exit-fullscreen'), () => {
+    if (fullscreenOn) toggleFullscreen();
+  });
+
+  bindClick(document.getElementById('cfg-fullscreen'), () => {
+    toggleFullscreen();
+    fecharSheet();
+  });
+
+  // ═══════ Configurações ═══════
+  function setCheck(elemId, ativo) {
+    const el = document.getElementById(elemId);
+    if (!el) return;
+    const check = el.querySelector('.item-check');
+    if (check) check.classList.toggle('active', ativo);
+  }
+
+  // Inicializa estados visuais
+  setCheck('cfg-compass', compassOn);
+  setCheck('cfg-fullscreen', fullscreenOn);
+
+  // ═══════ Bússola visual (rosa dos ventos) ═══════
+  // Como Leaflet não rotaciona o mapa nativamente, a bússola é apenas um
+  // widget visual que indica onde fica o norte. Como o norte do mapa está
+  // sempre para cima no Leaflet, a bússola é estática (mas útil para
+  // visualizar referência geográfica rapidamente).
+  bindClick(document.getElementById('cfg-compass'), () => {
+    compassOn = !compassOn;
+    setCheck('cfg-compass', compassOn);
+    const widget = document.getElementById('compass-widget');
+    if (widget) widget.classList.toggle('show', compassOn);
+  });
+
+  // ═══════ GPS ═══════
+  let gpsMarker = null;
+  bindClick(document.getElementById('fab-gps'), () => {
+    if (!navigator.geolocation) return;
+
+    const fab = document.getElementById('fab-gps');
+    if (fab) fab.classList.add('active');
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        if (gpsMarker) map.removeLayer(gpsMarker);
+        gpsMarker = L.circleMarker([latitude, longitude], {
+          radius: 8,
+          color: '#3b82f6',
+          weight: 3,
+          fillColor: '#3b82f6',
+          fillOpacity: 0.6
+        }).addTo(map);
+        map.setView([latitude, longitude], 15, { animate: true });
+        if (fab) setTimeout(() => fab.classList.remove('active'), 1500);
+      },
+      (err) => {
+        if (fab) fab.classList.remove('active');
+        console.warn('GPS error:', err.message);
+      },
+      { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 }
+    );
+  });
+
+  // ═══════ OTIMIZAÇÃO DE VENTO ═══════
+  // Pausa animação quando aba não está visível (economia de bateria/CPU)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (typeof pararAnimacao === 'function') pararAnimacao();
+    } else {
+      if (camadas.vento && typeof iniciarAnimacao === 'function') {
+        iniciarAnimacao(ventoStyle);
+      }
+    }
+  });
+
+  // ═══════ HOOK para manter mobile sync quando desktop muda algo ═══════
+  // Wrap aplicarCamadas e atualizarSubControles para atualizar UI mobile depois
+  const origAplicarCamadas = window.aplicarCamadas || aplicarCamadas;
+  window.aplicarCamadas = function() {
+    origAplicarCamadas.apply(this, arguments);
+    if (isMobile()) {
+      atualizarFabsAtivos();
+      atualizarNomesLotes();
+    }
+  };
+
+  const origAtualizarSubControles = window.atualizarSubControles || atualizarSubControles;
+  window.atualizarSubControles = function() {
+    origAtualizarSubControles.apply(this, arguments);
+    if (isMobile()) {
+      popularSheetVariavel();
+      atualizarFabsAtivos();
+    }
+  };
+
+  // ═══════ Inicialização ═══════
+  popularSheetCamadas();
+  popularSheetVariavel();
+  popularSheetMapa();
+  atualizarFabsAtivos();
+  atualizarNomesLotes();
+
+})();
+</script>
+
+</body>
+</html>
